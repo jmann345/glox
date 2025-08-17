@@ -1,0 +1,165 @@
+package main
+
+import (
+	"fmt"
+)
+
+type TokenType byte
+
+const (
+	// Single character tokens
+	LEFT_PAREN TokenType = iota
+	RIGHT_PAREN
+	LEFT_BRACE
+	RIGHT_BRACE
+	SEMICOLON
+	COMMA
+	DOT
+	POUND
+
+	// Math operators
+	MINUS
+	PLUS
+	SLASH
+	STAR
+	EQUAL
+
+	// Comparison operators
+	EQUAL_EQUAL
+	BANG_EQUAL
+	LESS
+	LESS_EQUAL
+	GREATER
+	GREATER_EQUAL
+
+	// Boolean keywords
+	// NOTE: Lox officially uses BANG instead of NOT
+	NOT
+	AND
+	OR
+	// NIL keyword
+	NIL
+	// Boolean keywords
+	TRUE
+	FALSE
+	// Control Flow keywords
+	IF
+	ELSE
+	WHILE
+	FOR
+	FUN
+	RETURN
+	// OOP Keywords
+	SUPER
+	THIS
+	CLASS
+	// Variable declaration keyword
+	VAR
+	// Misc. keyword(s)
+	PRINT // I don't like this :/
+
+	// Literals
+	IDENTIFIER
+	NUMBER
+	STRING
+
+	EOF
+)
+
+func (t TokenType) String() string {
+	switch t {
+	case LEFT_PAREN:
+		return "LEFT_PAREN"
+	case RIGHT_PAREN:
+		return "RIGHT_PAREN"
+	case LEFT_BRACE:
+		return "LEFT_BRACE"
+	case RIGHT_BRACE:
+		return "RIGHT_BRACE"
+	case SEMICOLON:
+		return "SEMICOLON"
+	case COMMA:
+		return "COMMA"
+	case DOT:
+		return "DOT"
+	case POUND:
+		return "POUND"
+	case MINUS:
+		return "MINUS"
+	case PLUS:
+		return "PLUS"
+	case SLASH:
+		return "SLASH"
+	case STAR:
+		return "STAR"
+	case EQUAL:
+		return "EQUAL"
+	case EQUAL_EQUAL:
+		return "EQUAL_EQUAL"
+	case BANG_EQUAL:
+		return "BANG_EQUAL"
+	case LESS:
+		return "LESS"
+	case LESS_EQUAL:
+		return "LESS_EQUAL"
+	case GREATER:
+		return "GREATER"
+	case GREATER_EQUAL:
+		return "GREATER_EQUAL"
+	case NOT:
+		return "NOT"
+	case AND:
+		return "AND"
+	case OR:
+		return "OR"
+	case NIL:
+		return "NIL"
+	case TRUE:
+		return "TRUE"
+	case FALSE:
+		return "FALSE"
+	case IF:
+		return "IF"
+	case ELSE:
+		return "ELSE"
+	case WHILE:
+		return "WHILE"
+	case FOR:
+		return "FOR"
+	case FUN:
+		return "FUN"
+	case RETURN:
+		return "RETURN"
+	case SUPER:
+		return "SUPER"
+	case THIS:
+		return "THIS"
+	case CLASS:
+		return "CLASS"
+	case VAR:
+		return "VAR"
+	case PRINT:
+		return "PRINT"
+	case IDENTIFIER:
+		return "IDENTIFIER"
+	case NUMBER:
+		return "NUMBER"
+	case STRING:
+		return "STRING"
+	case EOF:
+		return "EOF"
+	}
+	// TODO: Fix this. This is ugly. We should never panic here!
+	panic(fmt.Sprintf("invalid TokenType: %d", t))
+}
+
+type Token struct {
+	typ     TokenType
+	lexeme  string
+	literal any
+	line    int
+}
+
+func (t Token) String() string {
+	return fmt.Sprintf("%s %s %v", t.typ, t.lexeme, t.literal)
+}
