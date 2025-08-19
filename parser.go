@@ -18,7 +18,7 @@ func (e *ParseError) Error() string {
 }
 
 type Parser struct {
-	tokens 	[]Token
+	tokens  []Token
 	current int
 }
 
@@ -28,7 +28,7 @@ func (p *Parser) synchronize() {
 	for p.current < len(p.tokens) {
 		prev := p.tokens[p.current-1]
 		if prev.typ == SEMICOLON {
-			return 
+			return
 		}
 
 		if p.peekIsOneOf(
@@ -38,7 +38,6 @@ func (p *Parser) synchronize() {
 		p.current++
 	}
 }
-
 
 func (p *Parser) Parse() (Expr, error) {
 	return p.parseExpression()
@@ -71,7 +70,8 @@ func (p *Parser) parseEquality() (Expr, error) {
 
 	return expr, nil
 }
-// comparison ::= term ( ( > | >= | < |<=) term )*	
+
+// comparison ::= term ( ( > | >= | < |<=) term )*
 func (p *Parser) parseComparison() (Expr, error) {
 	expr, err := p.parseTerm()
 	if err != nil {
@@ -134,8 +134,9 @@ func (p *Parser) parseFactor() (Expr, error) {
 	return expr, nil
 }
 
-// unary ::= ( ! | - ) unary 
-// 		   | primary
+// unary ::= ( ! | - ) unary
+//
+//	| primary
 func (p *Parser) parseUnary() (Expr, error) {
 	if p.peekIsOneOf(NOT, MINUS) {
 		op := p.peekToken()
@@ -152,8 +153,8 @@ func (p *Parser) parseUnary() (Expr, error) {
 }
 
 /*
- * primary ::= NUMBER | STRING 
- * 			 | true | false | nil 
+ * primary ::= NUMBER | STRING
+ * 			 | true | false | nil
  * 			 | ( expression )
  */
 func (p *Parser) parsePrimary() (Expr, error) {
@@ -178,7 +179,7 @@ func (p *Parser) parsePrimary() (Expr, error) {
 		ok := p.consumeToken(RIGHT_PAREN)
 		if !ok {
 			err := &ParseError{
-				p.peekToken(), 
+				p.peekToken(),
 				"Expect ')' after expression.",
 			}
 			return nil, err
@@ -197,7 +198,6 @@ func (p *Parser) peekToken() Token {
 func (p *Parser) peekIsOneOf(types ...TokenType) bool {
 	return slices.Contains(types, p.peekToken().typ)
 }
-
 
 func (p *Parser) peekAndConsume() Token {
 	tok := p.tokens[p.current]

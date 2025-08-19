@@ -32,7 +32,6 @@ func main() {
 	// we say glox instead of jlox bc its golox not javalox!
 	numArgs := len(os.Args)
 
-
 	if numArgs > 2 {
 		fmt.Println("Usage: glox <script>")
 		os.Exit(64)

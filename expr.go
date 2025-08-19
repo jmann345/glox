@@ -7,7 +7,7 @@ import (
 )
 
 type Expr interface {
-	isExpr() 
+	isExpr()
 	fmt.Stringer
 }
 
@@ -15,25 +15,28 @@ type Assign struct {
 	name  Token
 	value Expr
 }
-func (*Assign) isExpr() { }
+
+func (*Assign) isExpr() {}
 func (a Assign) String() string {
-	return parenthesize("assign " + a.name.lexeme, a.value)
+	return parenthesize("assign "+a.name.lexeme, a.value)
 }
 
 type Binary struct {
 	lhs Expr
-	op 	Token
+	op  Token
 	rhs Expr
 }
-func (*Binary) isExpr() { }
+
+func (*Binary) isExpr() {}
 func (b Binary) String() string {
-    return parenthesize(b.op.lexeme, b.lhs, b.rhs)
+	return parenthesize(b.op.lexeme, b.lhs, b.rhs)
 }
 
 type Grouping struct {
 	expression Expr
 }
-func (*Grouping) isExpr() { }
+
+func (*Grouping) isExpr() {}
 func (g Grouping) String() string {
 	return parenthesize("group", g.expression)
 }
@@ -41,7 +44,8 @@ func (g Grouping) String() string {
 type Literal struct {
 	value any // float, string, boolean, or nil
 }
-func (*Literal) isExpr() { }
+
+func (*Literal) isExpr() {}
 func (l Literal) String() string {
 	switch v := l.value.(type) {
 	case string:
@@ -65,10 +69,11 @@ func (l Literal) String() string {
 }
 
 type Unary struct {
-	op	Token
+	op  Token
 	rhs Expr
 }
-func (*Unary) isExpr() { }
+
+func (*Unary) isExpr() {}
 func (u Unary) String() string {
 	return parenthesize(u.op.lexeme, u.rhs)
 }
