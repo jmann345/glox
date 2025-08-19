@@ -16,8 +16,10 @@ type LoxError struct {
 }
 
 func (e *LoxError) Error() string {
-	return fmt.Sprintf("[line %d] Error%s: %s",
-		e.line, e.where, e.message)
+	return fmt.Sprintf(
+		"[line %d] Error%s: %s",
+		e.line, e.where, e.message,
+	)
 }
 
 // TODO::Refactor to only initialize parts that require logic
@@ -29,6 +31,8 @@ func main() {
 
 	// we say glox instead of jlox bc its golox not javalox!
 	numArgs := len(os.Args)
+
+
 	if numArgs > 2 {
 		fmt.Println("Usage: glox <script>")
 		os.Exit(64)
@@ -93,17 +97,22 @@ func run(source string) /* error */ { // TODO: Make this return error (from a cr
 
 		tokenizer := new(Tokenizer)
 		tokenizer.Init(source)
-		errs := tokenizer.Tokenize()
+		toks, errs := tokenizer.Tokenize() // TODO: replace the _ with toks
 		for _, err := range errs {
 			fmt.Fprintln(os.Stderr, "Tokenizer:", err)
 		}
 
-		for _, tok := range tokenizer.tokens {
-			fmt.Printf("%s\n", tok)
+		parser := Parser{toks, 0}
+		expr, err := parser.Parse()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Parser:", err)
 		}
+		fmt.Println(expr)
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintln(os.Stderr, "scan error:", err)
 	}
 
 }
+
+// TODO: |> Need triangle operator for something bro

@@ -44,7 +44,7 @@ func (t *Tokenizer) Init(source string) {
 	t.line = 1
 }
 
-func (t *Tokenizer) Tokenize() []error {
+func (t *Tokenizer) Tokenize() ([]Token, []error) {
 	errs := make([]error, 0)
 	srcLen := len(t.source)
 	for t.current < srcLen {
@@ -55,7 +55,7 @@ func (t *Tokenizer) Tokenize() []error {
 		}
 	}
 	t.tokens = append(t.tokens, Token{EOF, "", nil, t.line})
-	return errs
+	return t.tokens, errs
 }
 
 func (t *Tokenizer) scanToken() error {
@@ -160,7 +160,6 @@ func (t *Tokenizer) addToken(typ TokenType, literal any) {
 	)
 }
 
-// TODO: add the funny >- operator for something lmaooo (merge 2 into 1? idk thats what it looks like it would do)
 func (t *Tokenizer) match(expected byte) bool {
 	if t.current >= len(t.source) {
 		return false
