@@ -24,7 +24,6 @@ func parenthesize(name string, exprs ...Expr) string {
 	return sb.String()
 }
 
-
 type Assign struct {
 	name  Token
 	value Expr
@@ -35,19 +34,19 @@ func (a Assign) String() string {
 	return parenthesize("assign "+a.name.lexeme, a.value)
 }
 
-
 type Binary struct {
 	lhs Expr
 	op  Token
 	rhs Expr
 }
+
 func (*Binary) isExpr() {}
 func (b Binary) String() string {
 	return parenthesize(b.op.lexeme, b.lhs, b.rhs)
 }
 
 type IfExpr struct {
-	cond 	   Expr
+	cond       Expr
 	thenBranch Expr
 	elseBranch Expr
 }
@@ -55,9 +54,8 @@ type IfExpr struct {
 func (*IfExpr) isExpr() {}
 func (i IfExpr) String() string {
 	return parenthesize(
-		"if " + i.cond.String(), i.thenBranch, i.elseBranch)
+		"if "+i.cond.String(), i.thenBranch, i.elseBranch)
 }
-
 
 type Grouping struct {
 	expression Expr
@@ -67,7 +65,6 @@ func (*Grouping) isExpr() {}
 func (g Grouping) String() string {
 	return parenthesize("group", g.expression)
 }
-
 
 type Literal struct {
 	value any // float, string, boolean, or nil
@@ -95,7 +92,6 @@ func (l Literal) String() string {
 		panic(msg)
 	}
 }
-
 
 type Unary struct {
 	op  Token

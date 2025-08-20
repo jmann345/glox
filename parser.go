@@ -152,7 +152,6 @@ func (p *Parser) parseIfExpr() (Expr, error) {
 			}
 		}
 
-
 		return &IfExpr{cond, thenExpr, elseExpr}, nil
 	}
 

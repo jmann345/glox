@@ -63,7 +63,7 @@ func (t *Tokenizer) scanToken() error {
 	t.current++
 	switch c {
 	case ' ', '\r', '\t':
-		; // pass
+		// pass
 	case '\n':
 		t.line++
 	case '(':
