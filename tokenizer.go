@@ -62,9 +62,8 @@ func (t *Tokenizer) scanToken() error {
 	c := t.source[t.current]
 	t.current++
 	switch c {
-	case ' ':
-	case '\r':
-	case '\t':
+	case ' ', '\r', '\t':
+		; // pass
 	case '\n':
 		t.line++
 	case '(':
