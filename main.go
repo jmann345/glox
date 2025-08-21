@@ -89,29 +89,22 @@ func runPrompt() error {
 	return nil
 }
 
-func run(source string) /* error */ { // TODO: Make this return error (from a created LoxError)!
-	scanner := bufio.NewScanner(strings.NewReader(source))
-	for scanner.Scan() {
-		source := scanner.Text()
+func run(source string) {
+	tokenizer := new(Tokenizer)
+	tokenizer.Init(source)
+	toks, errs := tokenizer.Tokenize() // TODO: replace the _ with toks
+	for _, err := range errs {
+		fmt.Fprintln(os.Stderr, "Tokenizer:", err)
+	}
 
-		tokenizer := new(Tokenizer)
-		tokenizer.Init(source)
-		toks, errs := tokenizer.Tokenize() // TODO: replace the _ with toks
-		for _, err := range errs {
-			fmt.Fprintln(os.Stderr, "Tokenizer:", err)
-		}
-
-		parser := Parser{toks, 0}
+	parser := Parser{toks, 0}
+	for !parser.IsFinished() {
 		expr, err := parser.Parse()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Parser:", err)
 		}
 		fmt.Println(expr)
 	}
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintln(os.Stderr, "scan error:", err)
-	}
-
 }
 
 // TODO: |> Need triangle operator for something bro

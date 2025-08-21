@@ -23,7 +23,8 @@ type Parser struct {
 }
 
 // We'll use this later! I think we can use go's recover for this :)
-func (p *Parser) synchronize() {
+// Not sure if it should be pub or priv
+func (p *Parser) Synchronize() {
 	p.current++
 	for p.current < len(p.tokens) {
 		prev := p.tokens[p.current-1]
@@ -40,6 +41,10 @@ func (p *Parser) synchronize() {
 }
 func (p *Parser) Parse() (Expr, error) {
 	return p.parseExpression()
+}
+
+func (p *Parser) IsFinished() bool {
+	return p.peekToken().typ == EOF
 }
 
 // expr ::= comma
@@ -89,12 +94,8 @@ func (p *Parser) parseIfExpr() (Expr, error) {
 			return nil, err
 		}
 
-		ok := p.consumeToken(LEFT_BRACE)
-		if !ok {
-			err := &ParseError{
-				p.peekToken(),
-				"Expect '{' after condition",
-			}
+		err = p.consumeToken(LEFT_BRACE, "Expect '{' after condition")
+		if err != nil {
 			return nil, err
 		}
 
@@ -103,21 +104,13 @@ func (p *Parser) parseIfExpr() (Expr, error) {
 			return nil, err
 		}
 
-		ok = p.consumeToken(RIGHT_BRACE)
-		if !ok {
-			err := &ParseError{
-				p.peekToken(),
-				"Expect '}' after if-block.",
-			}
+		err = p.consumeToken(RIGHT_BRACE, "Expect '}' after if-block.")
+		if err != nil {
 			return nil, err
 		}
 
-		ok = p.consumeToken(ELSE)
-		if !ok {
-			err := &ParseError{
-				p.peekToken(),
-				"Expect 'else' after 'if' expression.",
-			}
+		err = p.consumeToken(ELSE, "Expect 'else' after 'if' expression.")
+		if err != nil {
 			return nil, err
 		}
 
@@ -128,12 +121,8 @@ func (p *Parser) parseIfExpr() (Expr, error) {
 				return nil, err
 			}
 		} else {
-			ok = p.consumeToken(LEFT_BRACE)
-			if !ok {
-				err := &ParseError{
-					p.peekToken(),
-					"Expect '{' after 'else'.",
-				}
+			err = p.consumeToken(LEFT_BRACE, "Expect '{' after 'else'.")
+			if err != nil {
 				return nil, err
 			}
 
@@ -142,12 +131,8 @@ func (p *Parser) parseIfExpr() (Expr, error) {
 				return nil, err
 			}
 
-			ok = p.consumeToken(RIGHT_BRACE)
-			if !ok {
-				err := &ParseError{
-					p.peekToken(),
-					"Expect '}' after else-block.",
-				}
+			err = p.consumeToken(RIGHT_BRACE, "Expect '}' after else-block.")
+			if err != nil {
 				return nil, err
 			}
 		}
@@ -178,6 +163,7 @@ func (p *Parser) parseEquality() (Expr, error) {
 
 	// We loop here to support syntax like:
 	// a < b < c (methinks)
+	// NOTE: 'a < b < c' is currently unsupported tho :(
 	for p.peekIsOneOf(BANG_EQUAL, EQUAL_EQUAL) {
 		p.current++
 
@@ -331,12 +317,8 @@ func (p *Parser) parsePrimary() (Expr, error) {
 			return nil, err
 		}
 
-		ok := p.consumeToken(RIGHT_PAREN)
-		if !ok {
-			err := &ParseError{
-				p.peekToken(),
-				"Expect ')' after expression.",
-			}
+		err = p.consumeToken(RIGHT_PAREN, "Expect ')' after expression.")
+		if err != nil {
 			return nil, err
 		}
 
@@ -361,10 +343,11 @@ func (p *Parser) peekAndConsume() Token {
 	return tok
 }
 
-func (p *Parser) consumeToken(typ TokenType) bool {
-	if p.peekToken().typ == typ {
+func (p *Parser) consumeToken(typ TokenType, message string) error {
+	tok := p.peekToken()
+	if tok.typ == typ {
 		p.current++
-		return true
+		return nil
 	}
-	return false
+	return &ParseError{tok, message}
 }

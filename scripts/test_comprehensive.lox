@@ -1,0 +1,50 @@
+#[ Arithmetic and precedence
+   Only the first expr will parse correctly for now
+]#
+1 + 2 * 3
+
+(1 + 2) * 3
+10 - 2 - 3
+
+# Unary
+not not false
+--5
+
+# Logical
+true and false or true
+false or true and false
+
+# Comparison and equality
+1 < 2 == true
+2 <= 2 != false
+3 > 1
+4 >= 4
+
+# Comma operator
+1,2,3
+1, 2+3
+1+2,3+4,5
+
+# If-expressions
+if 1 < 2 { "yes" } else { "no" }
+if true { 0 } else if false { 1 } else { 2 }
+if true { 1,2,3 } else { 4 }
+
+# Strings
+"hello"
+"Hello World!"
+
+# Comments
+# single line comment
+#[ multi
+   line
+   comment ]#
+"after comment"
+
+# Error cases to check diagnostics
+"unterminated
+* 2
+== 3
+<= 4
+!   # bare ! should error
+#[ unterminated block comment

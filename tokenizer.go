@@ -128,12 +128,12 @@ func (t *Tokenizer) scanToken() error {
 		}
 	default:
 		switch {
-		case isDigit(c):
+		case IsDigit(c):
 			err := t.scanNumber()
 			if err != nil {
 				return err
 			}
-		case isAlpha(c):
+		case IsAlpha(c):
 			t.scanIdentifierOrKeyword()
 		default:
 			return &LoxError{
@@ -234,12 +234,12 @@ func (t *Tokenizer) scanString() error {
 }
 
 func (t *Tokenizer) scanNumber() error {
-	for isDigit(t.peekChar()) {
+	for IsDigit(t.peekChar()) {
 		t.current++
 	}
-	if t.peekChar() == '.' && isDigit(t.peekNextChar()) {
+	if t.peekChar() == '.' && IsDigit(t.peekNextChar()) {
 		t.current++ // consume the .
-		for isDigit(t.peekChar()) {
+		for IsDigit(t.peekChar()) {
 			t.current++
 		}
 	}
@@ -259,7 +259,7 @@ func (t *Tokenizer) scanNumber() error {
 }
 
 func (t *Tokenizer) scanIdentifierOrKeyword() {
-	for isAlphaNumeric(t.peekChar()) {
+	for IsAlphaNumeric(t.peekChar()) {
 		t.current++
 	}
 	text := t.source[t.start:t.current]
