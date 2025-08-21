@@ -46,6 +46,7 @@ func (b Binary) String() string {
 }
 
 type IfExpr struct {
+	tok        Token
 	cond       Expr
 	thenBranch Expr
 	elseBranch Expr

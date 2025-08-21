@@ -84,7 +84,7 @@ func (p *Parser) parseComma() (Expr, error) {
 
 // CHALLENGE 2: Add ternary operator
 // (I opted to do add the rust-style if expr instead)
-// ifExpr ::= equality | if equality { expr } else ( { expr } | ifExpr )
+// ifExpr ::= equality | 'if' equality { expr } 'else' ( { expr } | ifExpr )
 func (p *Parser) parseIfExpr() (Expr, error) {
 	if tok := p.peekToken(); tok.typ == IF {
 		p.current++
@@ -137,7 +137,7 @@ func (p *Parser) parseIfExpr() (Expr, error) {
 			}
 		}
 
-		return &IfExpr{cond, thenExpr, elseExpr}, nil
+		return &IfExpr{tok, cond, thenExpr, elseExpr}, nil
 	}
 
 	return p.parseEquality()
@@ -199,6 +199,8 @@ func (p *Parser) parseComparison() (Expr, error) {
 		return nil, err
 	}
 
+	// TODO: Allow for chain comparisons
+	// e.g. we want to desugar 1 < 2 < 3  into (1 < 2) and (2 < 3)
 	for p.peekIsOneOf(GREATER, GREATER_EQUAL, LESS, LESS_EQUAL) {
 		p.current++
 

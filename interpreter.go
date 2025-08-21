@@ -12,7 +12,21 @@ func (e *RuntimeError) Error() string {
 		e.tok.line, e.tok.lexeme, e.msg)
 }
 
-func Evaluate(expr Expr) (any, error) {
+// NOTE: Right now there is no "Interpreter" struct
+// As I do not yet need to keep track of the state of the interpreter
+// I prefer to avoid adding additional global state unless absolutely necessary
+
+func Interpret(exprs ...Expr) ([]any, []error) {
+	vals, errs := []any{}, []error{}
+	for _, expr := range exprs {
+		val, err := evaluate(expr)
+		vals = append(vals, val)
+		errs = append(errs, err)
+	}
+	return vals, errs
+}
+
+func evaluate(expr Expr) (any, error) {
 	switch e := expr.(type) {
 	case *Literal:
 		return e.value, nil
@@ -20,6 +34,10 @@ func Evaluate(expr Expr) (any, error) {
 		return evalUnary(e)
 	case *Binary:
 		return evalBinary(e)
+	case *IfExpr:
+		return evalIfExpr(e)
+	case *Grouping:
+		return evaluate(e.expression)
 	default:
 		panic(fmt.Sprintf(
 			"Unimplemented Expression type: %T", e))
@@ -27,7 +45,7 @@ func Evaluate(expr Expr) (any, error) {
 }
 
 func evalUnary(expr *Unary) (any, error) {
-	rhs, err := Evaluate(expr.rhs)
+	rhs, err := evaluate(expr.rhs)
 	if err != nil {
 		return nil, err
 	}
@@ -64,23 +82,18 @@ func evalUnary(expr *Unary) (any, error) {
 // evalComma
 // evalEquality
 // evalComparison
-// evalMath (term or factor) -- HANDLE STRING CONCAT
+// evalMath (term or factor)
+// <replace with rest>
 func evalBinary(expr *Binary) (any, error) {
-	// FIXME: Need to handle nils properly
-	// For example, "hello" == nil is valid
-	// But "hello" + nil is an incompatible type error!
-	// Or... we could simply enforce nilable types as separate
-	// For now, let's allow everything to be nilable.
-	// TODO: Use where relevent
 	switch expr.op.typ {
 	case COMMA:
 		// discard lhs, return rhs
-		_, err := Evaluate(expr.lhs)
+		_, err := evaluate(expr.lhs)
 		if err != nil {
 			return nil, err
 		}
 
-		rhs, err := Evaluate(expr.rhs)
+		rhs, err := evaluate(expr.rhs)
 		if err != nil {
 			return nil, err
 		}
@@ -90,27 +103,33 @@ func evalBinary(expr *Binary) (any, error) {
 		return evalEquality(expr)
 	case LESS, LESS_EQUAL, GREATER, GREATER_EQUAL:
 		return evalComparison(expr)
+	case PLUS, MINUS, STAR, SLASH:
+		return evalMath(expr)
 	}
 	panic("Unreachable.")
 }
 
 func evalEquality(expr *Binary) (any, error) {
-	lhs, err := Evaluate(expr.lhs)
+	lhs, err := evaluate(expr.lhs)
 	if err != nil {
 		return nil, err
 	}
 
-	rhs, err := Evaluate(expr.rhs)
+	rhs, err := evaluate(expr.rhs)
 	if err != nil {
 		return nil, err
 	}
 
 	if !SameType(lhs, rhs) {
 		if lhs == nil || rhs == nil {
-			if expr.op.typ == EQUAL_EQUAL {
+			switch expr.op.typ {
+			case EQUAL_EQUAL:
 				return false, nil
+			case BANG_EQUAL:
+				return true, nil
+			default:
+				panic("Unreachable.")
 			}
-			return true, nil
 		}
 
 		return nil, &RuntimeError{
@@ -132,12 +151,12 @@ func evalEquality(expr *Binary) (any, error) {
 }
 
 func evalComparison(expr *Binary) (any, error) {
-	lhs, err := Evaluate(expr.lhs)
+	lhs, err := evaluate(expr.lhs)
 	if err != nil {
 		return nil, err
 	}
 
-	rhs, err := Evaluate(expr.rhs)
+	rhs, err := evaluate(expr.rhs)
 	if err != nil {
 		return nil, err
 	}
@@ -184,4 +203,88 @@ func evalComparison(expr *Binary) (any, error) {
 	}
 
 	panic("Unreachable.")
+}
+
+func evalMath(expr *Binary) (any, error) {
+	lhs, err := evaluate(expr.lhs)
+	if err != nil {
+		return nil, err
+	}
+
+	rhs, err := evaluate(expr.rhs)
+	if err != nil {
+		return nil, err
+	}
+
+	if !SameType(lhs, rhs) {
+		return nil, &RuntimeError{
+			tok: expr.op,
+			msg: fmt.Sprintf(
+				"Incompatible types: %T and %T", lhs, rhs,
+			),
+		}
+	}
+
+	// Currently, the only overloaded op is '+' for string concatenation
+	if lhs, ok := lhs.(string); ok {
+		if expr.op.typ != PLUS {
+			return nil, &RuntimeError{
+				expr.op,
+				fmt.Sprintf("'%s' Operands must be numbers.", expr.op.lexeme),
+			}
+		}
+
+		rhs, _ := rhs.(string)
+		return lhs + rhs, nil
+	}
+
+	lhs_n, ok := lhs.(float64)
+	rhs_n, _ := rhs.(float64)
+	if !ok {
+		return nil, &RuntimeError{
+			expr.op,
+			fmt.Sprintf("Invalid math operand type: %T", lhs),
+		}
+	}
+
+	switch expr.op.typ {
+	case PLUS:
+		return lhs_n + rhs_n, nil
+	case MINUS:
+		return lhs_n - rhs_n, nil
+	case STAR:
+		return lhs_n * rhs_n, nil
+	case SLASH:
+		// NOTE: golang behavior:
+		// 0/0 == NaN
+		// 1/0 == +Inf
+		// -1/0 == -Inf
+		// I'm fine with this for now!
+		return lhs_n / rhs_n, nil
+	}
+
+	panic("Unreachable.")
+}
+
+func evalIfExpr(expr *IfExpr) (any, error) {
+	cond, err := evaluate(expr.cond)
+	if err != nil {
+		return nil, err
+	}
+
+	condVal, ok := cond.(bool)
+	if !ok {
+		return nil, &RuntimeError{
+			expr.tok,
+			"Condition of 'if' must be boolean.",
+		}
+	}
+
+	// NOTE: For now, an if expression can evaluate to different types
+	// NOTE: Error's in the non-traveled branch won't be reported
+	if condVal {
+		return evaluate(expr.thenBranch)
+	} else {
+		return evaluate(expr.elseBranch)
+	}
 }

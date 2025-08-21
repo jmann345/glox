@@ -102,8 +102,19 @@ func run(source string) {
 		expr, err := parser.Parse()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Parser:", err)
+			continue
 		}
-		fmt.Println(expr)
+
+		// TODO: multi-line interpretation
+		vals, errs := Interpret(expr)
+		val, err := vals[0], errs[0]
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Runtime:", err)
+			// os.Exit(70) <-- Should only happen if running script tho
+		} else {
+			fmt.Println("expr: " + expr.String())
+			fmt.Println(val)
+		}
 	}
 }
 
