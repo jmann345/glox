@@ -61,7 +61,8 @@ func runFile(path string) error {
 	}
 
 	/* err := */
-	run(string(buff)) // may need to specify utf-8/acsii
+	interpreter := NewInterpreter()
+	run(string(buff), interpreter) // may need to specify utf-8/acsii
 	// NOTE: errs should be printed inside run()!
 	// if err != nil { os.Exit(64) }
 
@@ -70,7 +71,7 @@ func runFile(path string) error {
 
 func runPrompt() error {
 	reader := bufio.NewReader(os.Stdin)
-
+	interpreter := NewInterpreter()
 	for {
 		fmt.Print(":> ")
 
@@ -82,37 +83,38 @@ func runPrompt() error {
 		if strings.TrimSpace(line) == "" {
 			break
 		}
-		/* _ = */ run(line) // error printed inside run
+		/* _ = */ run(line, interpreter) // error printed inside run
 		// We ignore errors in runPrompt() bc it will just be printed, user can retry
 	}
 
 	return nil
 }
 
-func run(source string) {
+// TODO: Add `context *CodeContext` parameter (maybe in shell mode only)
+func run(source string, interpreter *Interpreter) {
 	tokenizer := new(Tokenizer)
 	tokenizer.Init(source)
-	toks, errs := tokenizer.Tokenize() // TODO: replace the _ with toks
+	toks, errs := tokenizer.Tokenize()
 	for _, err := range errs {
 		fmt.Fprintln(os.Stderr, "Tokenizer:", err)
 	}
 
 	parser := Parser{toks, 0}
-	for !parser.IsFinished() {
-		expr, err := parser.Parse()
+	for !parser.IsAtEnd() {
+		stmt, err := parser.Parse()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Parser:", err)
 			continue
 		}
 
 		// TODO: multi-line interpretation
-		vals, errs := Interpret(expr)
+		vals, errs := interpreter.Interpret(stmt)
 		val, err := vals[0], errs[0]
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Runtime:", err)
 			// os.Exit(70) <-- Should only happen if running script tho
 		} else {
-			fmt.Println("expr: " + expr.String())
+			fmt.Println("expr: " + stmt.String())
 			fmt.Println(val)
 		}
 	}

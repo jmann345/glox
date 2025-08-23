@@ -46,8 +46,8 @@ func (b Binary) String() string {
 }
 
 type IfExpr struct {
-	tok        Token
-	cond       Expr
+	token      Token
+	condition  Expr
 	thenBranch Expr
 	elseBranch Expr
 }
@@ -55,7 +55,7 @@ type IfExpr struct {
 func (*IfExpr) isExpr() {}
 func (i IfExpr) String() string {
 	return parenthesize(
-		"if "+i.cond.String(), i.thenBranch, i.elseBranch)
+		"if "+i.condition.String(), i.thenBranch, i.elseBranch)
 }
 
 type Grouping struct {
@@ -102,4 +102,13 @@ type Unary struct {
 func (*Unary) isExpr() {}
 func (u Unary) String() string {
 	return parenthesize(u.op.lexeme, u.rhs)
+}
+
+type Variable struct {
+	name Token
+}
+
+func (*Variable) isExpr() {}
+func (v Variable) String() string {
+	return parenthesize(v.name.lexeme)
 }

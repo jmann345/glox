@@ -22,9 +22,16 @@ type Parser struct {
 	current int
 }
 
-// We'll use this later! I think we can use go's recover for this :)
-// Not sure if it should be pub or priv
-func (p *Parser) Synchronize() {
+func (p *Parser) IsAtEnd() bool {
+	return p.peekToken().typ == EOF
+}
+
+// program ::= declaration* EOF
+func (p *Parser) Parse() (Stmt, error) {
+	return p.parseDeclaration()
+}
+
+func (p *Parser) synchronize() {
 	p.current++
 	for p.current < len(p.tokens) {
 		prev := p.tokens[p.current-1]
@@ -39,17 +46,132 @@ func (p *Parser) Synchronize() {
 		p.current++
 	}
 }
-func (p *Parser) Parse() (Expr, error) {
-	return p.parseExpression()
+
+
+// declaration ::= varDecl | statement
+func (p *Parser) parseDeclaration() (Stmt, error) {
+	var stmt Stmt
+	var err error
+	if p.peekToken().typ == VAR {
+		p.current++
+		stmt, err = p.parseVarDecl()
+	} else {
+	    stmt, err = p.parseStatement()
+	}
+
+	if err != nil {
+		p.synchronize()
+		return nil, err
+	}
+
+	return stmt, nil
 }
 
-func (p *Parser) IsFinished() bool {
-	return p.peekToken().typ == EOF
+// varDecl ::= "var" IDENTIFIER ( "=" expression )? ";"
+func (p *Parser) parseVarDecl() (Stmt, error) {
+	name := p.peekToken()
+	err := p.consumeToken(IDENTIFIER, "Invalid Identifier.")
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: Create a separate keyword for undefined
+	// e.g.:
+	/*
+		var x;
+		print x;
+		>>> "undefined"
+	*/
+	var initializer Expr = &Literal{nil}
+	if p.peekToken().typ == EQUAL {
+		p.current++
+
+		initializer, err = p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = p.consumeToken(SEMICOLON, "Expect ';' after variable declaration.")
+	if err != nil {
+		return nil, err
+	}
+
+	return &VarDecl{name, initializer}, nil
 }
 
-// expr ::= comma
+// statement ::= exprStmt | printStmt
+func (p *Parser) parseStatement() (Stmt, error) {
+	if p.peekToken().typ == PRINT {
+		p.current++ // consume PRINT token
+		return p.parsePrintStmt()
+	}
+
+	return p.parseExprStmt()
+}
+
+
+// exprStmt ::= expression ";"
+func (p *Parser) parseExprStmt() (Stmt, error) {
+	expr, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	err = p.consumeToken(SEMICOLON, "Expect ';' after expression.")
+	if err != nil {
+		return nil, err
+	}
+
+	return &ExprStmt{expr}, nil
+}
+
+// print ::= "print" value ";"
+func (p *Parser) parsePrintStmt() (Stmt, error) {
+	value, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	err = p.consumeToken(SEMICOLON, "Expect ';' after value.")
+	if err != nil {
+		return nil, err
+	}
+
+	return &PrintStmt{value}, nil
+}
+
+
+// expression ::= assignment
 func (p *Parser) parseExpression() (Expr, error) {
-	return p.parseComma()
+	return p.parseAssignment()
+}
+
+// assignment ::= IDENTIFIER '=' assignment | comma
+func (p *Parser) parseAssignment() (Expr, error) {
+	expr, err := p.parseComma()
+	if err != nil {
+		return nil, err
+	}
+
+	if tok := p.peekToken(); tok.typ == EQUAL {
+		p.current++ // consume '='
+
+		value, err := p.parseAssignment()
+		if err != nil {
+			return nil, err
+		}
+
+		if expr, ok := expr.(*Variable); ok {
+			return &Assign{expr.name, value}, nil
+		}
+
+		return nil, &ParseError{
+			tok, "Invalid assignment target.",
+		}
+	}
+
+	return expr, nil
 }
 
 // CHALLENGE 1: Add comma (easy)
@@ -299,10 +421,10 @@ func (p *Parser) parseUnary() (Expr, error) {
  * primary ::= NUMBER | STRING
  * 			 | 'true' | 'false' | 'nil'
  * 			 | ( expression )
+ * 			 | IDENTIFIER
  */
 func (p *Parser) parsePrimary() (Expr, error) {
-	tok := p.peekAndConsume()
-	switch tok.typ {
+	switch tok := p.peekAndConsume(); tok.typ {
 	case NUMBER:
 		return &Literal{tok.literal}, nil
 	case STRING:
@@ -325,12 +447,15 @@ func (p *Parser) parsePrimary() (Expr, error) {
 		}
 
 		return &Grouping{expr}, nil
+	case IDENTIFIER:
+		return &Variable{tok}, nil
+	default:
+		return nil, &ParseError{tok, "Expect expression."}
 	}
-
-	return nil, &ParseError{tok, "Expect expression."}
 }
 
 func (p *Parser) peekToken() Token {
+	p.current = min(p.current, len(p.tokens)-1) // avoid passing EOF
 	return p.tokens[p.current]
 }
 

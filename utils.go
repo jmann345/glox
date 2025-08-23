@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 func IsDigit(c byte) bool {
 	return c >= '0' && c <= '9'
 }
@@ -12,6 +14,17 @@ func IsAlpha(c byte) bool {
 
 func IsAlphaNumeric(c byte) bool {
 	return IsAlpha(c) || IsDigit(c)
+}
+
+func Stringify(value any) string {
+	switch value.(type) {
+	case nil:
+		return "nil"
+	case bool, float64, string:
+		return fmt.Sprintf("%v", value)
+	default:
+		panic("Unreachable.")
+	}
 }
 
 func SameType(lhs, rhs any) bool {

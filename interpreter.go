@@ -12,40 +12,98 @@ func (e *RuntimeError) Error() string {
 		e.tok.line, e.tok.lexeme, e.msg)
 }
 
-// NOTE: Right now there is no "Interpreter" struct
-// As I do not yet need to keep track of the state of the interpreter
-// I prefer to avoid adding additional global state unless absolutely necessary
+type Interpreter struct {
+	env Environment
+}
 
-func Interpret(exprs ...Expr) ([]any, []error) {
+func NewInterpreter() *Interpreter {
+	return &Interpreter{
+		Environment{nil, make(map[string]any)},
+	}
+}
+
+func (i *Interpreter) Interpret(stmts ...Stmt) ([]any, []error) {
 	vals, errs := []any{}, []error{}
-	for _, expr := range exprs {
-		val, err := evaluate(expr)
+	for _, stmt := range stmts {
+		val, err := i.execute(stmt)
 		vals = append(vals, val)
 		errs = append(errs, err)
 	}
 	return vals, errs
 }
 
-func evaluate(expr Expr) (any, error) {
+func (i *Interpreter) execute(stmt Stmt) (any, error) {
+	switch s := stmt.(type) {
+	case *VarDecl:
+		val, err := i.evaluate(s.expr)
+		if err != nil {
+			return nil, err
+		}
+
+		i.env.set(s.name.lexeme, val)
+
+		return nil, nil
+	case *ExprStmt:
+		return i.evaluate(s.expr)
+	case *PrintStmt:
+		value, err := i.evaluate(s.expr)
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Println(Stringify(value))
+
+		return nil, nil
+	default:
+		panic(fmt.Sprintf(
+			"Unimplemented Statement type: %T", s))
+	}
+}
+
+func (i *Interpreter) evaluate(expr Expr) (any, error) {
 	switch e := expr.(type) {
 	case *Literal:
 		return e.value, nil
+	case *Variable:
+		val, ok := i.env.get(e.name.lexeme)
+		if !ok {
+			return nil, &RuntimeError{
+				e.name, "Undefined Variable '" + e.name.lexeme + "'.",
+			}
+		}
+
+		return val, nil
+	case *Assign:
+		if _, ok := i.env.get(e.name.lexeme); !ok {
+			return nil, &RuntimeError{
+				e.name, "Undefined Variable '" + e.name.lexeme + "'.",
+			}
+		}
+
+		val, err := i.evaluate(e.value)
+		if err != nil {
+			return nil, err
+		}
+
+		i.env.set(e.name.lexeme, val)
+
+		return val, nil // not sure if we need to return e.value
 	case *Unary:
-		return evalUnary(e)
+		return i.evalUnary(e)
 	case *Binary:
-		return evalBinary(e)
+		return i.evalBinary(e)
 	case *IfExpr:
-		return evalIfExpr(e)
+		return i.evalIfExpr(e)
 	case *Grouping:
-		return evaluate(e.expression)
+		return i.evaluate(e.expression)
 	default:
 		panic(fmt.Sprintf(
 			"Unimplemented Expression type: %T", e))
 	}
 }
 
-func evalUnary(expr *Unary) (any, error) {
-	rhs, err := evaluate(expr.rhs)
+func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
+	rhs, err := i.evaluate(expr.rhs)
 	if err != nil {
 		return nil, err
 	}
@@ -84,38 +142,38 @@ func evalUnary(expr *Unary) (any, error) {
 // evalComparison
 // evalMath (term or factor)
 // <replace with rest>
-func evalBinary(expr *Binary) (any, error) {
+func (i *Interpreter) evalBinary(expr *Binary) (any, error) {
 	switch expr.op.typ {
 	case COMMA:
 		// discard lhs, return rhs
-		_, err := evaluate(expr.lhs)
+		_, err := i.evaluate(expr.lhs)
 		if err != nil {
 			return nil, err
 		}
 
-		rhs, err := evaluate(expr.rhs)
+		rhs, err := i.evaluate(expr.rhs)
 		if err != nil {
 			return nil, err
 		}
 
 		return rhs, nil
 	case EQUAL_EQUAL, BANG_EQUAL:
-		return evalEquality(expr)
+		return i.evalEquality(expr)
 	case LESS, LESS_EQUAL, GREATER, GREATER_EQUAL:
-		return evalComparison(expr)
+		return i.evalComparison(expr)
 	case PLUS, MINUS, STAR, SLASH:
-		return evalMath(expr)
+		return i.evalMath(expr)
 	}
 	panic("Unreachable.")
 }
 
-func evalEquality(expr *Binary) (any, error) {
-	lhs, err := evaluate(expr.lhs)
+func (i *Interpreter) evalEquality(expr *Binary) (any, error) {
+	lhs, err := i.evaluate(expr.lhs)
 	if err != nil {
 		return nil, err
 	}
 
-	rhs, err := evaluate(expr.rhs)
+	rhs, err := i.evaluate(expr.rhs)
 	if err != nil {
 		return nil, err
 	}
@@ -150,13 +208,13 @@ func evalEquality(expr *Binary) (any, error) {
 	panic("Unreachable.")
 }
 
-func evalComparison(expr *Binary) (any, error) {
-	lhs, err := evaluate(expr.lhs)
+func (i *Interpreter) evalComparison(expr *Binary) (any, error) {
+	lhs, err := i.evaluate(expr.lhs)
 	if err != nil {
 		return nil, err
 	}
 
-	rhs, err := evaluate(expr.rhs)
+	rhs, err := i.evaluate(expr.rhs)
 	if err != nil {
 		return nil, err
 	}
@@ -205,13 +263,13 @@ func evalComparison(expr *Binary) (any, error) {
 	panic("Unreachable.")
 }
 
-func evalMath(expr *Binary) (any, error) {
-	lhs, err := evaluate(expr.lhs)
+func (i *Interpreter) evalMath(expr *Binary) (any, error) {
+	lhs, err := i.evaluate(expr.lhs)
 	if err != nil {
 		return nil, err
 	}
 
-	rhs, err := evaluate(expr.rhs)
+	rhs, err := i.evaluate(expr.rhs)
 	if err != nil {
 		return nil, err
 	}
@@ -266,8 +324,8 @@ func evalMath(expr *Binary) (any, error) {
 	panic("Unreachable.")
 }
 
-func evalIfExpr(expr *IfExpr) (any, error) {
-	cond, err := evaluate(expr.cond)
+func (i *Interpreter) evalIfExpr(expr *IfExpr) (any, error) {
+	cond, err := i.evaluate(expr.condition)
 	if err != nil {
 		return nil, err
 	}
@@ -275,16 +333,16 @@ func evalIfExpr(expr *IfExpr) (any, error) {
 	condVal, ok := cond.(bool)
 	if !ok {
 		return nil, &RuntimeError{
-			expr.tok,
+			expr.token,
 			"Condition of 'if' must be boolean.",
 		}
 	}
 
-	// NOTE: For now, an if expression can evaluate to different types
-	// NOTE: Error's in the non-traveled branch won't be reported
+	// NOTE: For now, an if expression can i.evaluate to different types
+	// NOTE: Errors in the non-traveled branch won't be reported
 	if condVal {
-		return evaluate(expr.thenBranch)
+		return i.evaluate(expr.thenBranch)
 	} else {
-		return evaluate(expr.elseBranch)
+		return i.evaluate(expr.elseBranch)
 	}
 }
