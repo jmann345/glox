@@ -47,16 +47,15 @@ func (p *Parser) synchronize() {
 	}
 }
 
-
 // declaration ::= varDecl | statement
 func (p *Parser) parseDeclaration() (Stmt, error) {
 	var stmt Stmt
 	var err error
 	if p.peekToken().typ == VAR {
-		p.current++
+		p.current++ // consume "var"
 		stmt, err = p.parseVarDecl()
 	} else {
-	    stmt, err = p.parseStatement()
+		stmt, err = p.parseStatement()
 	}
 
 	if err != nil {
@@ -164,7 +163,6 @@ func (p *Parser) parsePrintStmt() (Stmt, error) {
 
 	return &PrintStmt{value}, nil
 }
-
 
 // expression ::= assignment
 func (p *Parser) parseExpression() (Expr, error) {
@@ -420,7 +418,7 @@ func (p *Parser) parseFactor() (Expr, error) {
 
 // unary ::= ( ( 'not' | '-' | '--' | '++' ) unary ) | postfix
 func (p *Parser) parseUnary() (Expr, error) {
-	if op, ok := p.consumeOneOf(NOT, MINUS, MINUS_MINUS, PLUS_PLUS,); ok {
+	if op, ok := p.consumeOneOf(NOT, MINUS, MINUS_MINUS, PLUS_PLUS); ok {
 		rhs, err := p.parseUnary()
 		if err != nil {
 			return nil, err

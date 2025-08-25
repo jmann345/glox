@@ -180,10 +180,9 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 			}
 		}
 
-
 		i.env.set(key, val-1)
-		
-		return val-1, nil
+
+		return val - 1, nil
 	case PLUS_PLUS:
 		varExpr, ok := expr.rhs.(*Variable)
 		if !ok {
@@ -210,10 +209,9 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 			}
 		}
 
-
 		i.env.set(key, val+1)
-		
-		return val+1, nil
+
+		return val + 1, nil
 	default:
 		panic(fmt.Sprintf(
 			"Unreachable: unexpected unary operand: %v", expr.op))
@@ -243,7 +241,6 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 		}
 	}
 
-	
 	val, ok := lhs.(float64)
 	if !ok {
 		return nil, &RuntimeError{
@@ -264,12 +261,6 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 	return val, nil
 }
 
-// TODO: Split into:
-// evalComma
-// evalEquality
-// evalComparison
-// evalMath (term or factor)
-// <replace with rest>
 func (i *Interpreter) evalBinary(expr *Binary) (any, error) {
 	switch expr.op.typ {
 	case COMMA:

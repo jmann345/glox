@@ -22,10 +22,6 @@ func (e *LoxError) Error() string {
 	)
 }
 
-// TODO::Refactor to only initialize parts that require logic
-// (but see if logic can be handled within pkl file)
-// Also TODO : Take rgb values for all colors and use RGBToAttribute
-
 func main() {
 	// TODO: path should be var determined by user input
 
@@ -119,5 +115,3 @@ func run(source string, interpreter *Interpreter) {
 		}
 	}
 }
-
-// TODO: |> Need triangle operator for something bro

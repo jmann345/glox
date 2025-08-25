@@ -93,7 +93,7 @@ func (t *Tokenizer) scanToken() error {
 		t.addToken(STAR, nil)
 	case '/':
 		t.addToken(SLASH, nil)
-	case '!': // TODO: Add `not` keyword!
+	case '!':
 		if t.match('=') {
 			t.addToken(BANG_EQUAL, nil)
 		} else {

@@ -15,7 +15,6 @@ const (
 	SEMICOLON
 	COMMA
 	DOT
-	POUND
 
 	// Math operators
 	MINUS
@@ -86,8 +85,6 @@ func (t TokenType) String() string {
 		return "COMMA"
 	case DOT:
 		return "DOT"
-	case POUND:
-		return "POUND"
 	case MINUS:
 		return "MINUS"
 	case PLUS:
@@ -153,8 +150,8 @@ func (t TokenType) String() string {
 	case EOF:
 		return "EOF"
 	}
-	// TODO: Fix this. This is ugly. We should never panic here!
-	panic(fmt.Sprintf("invalid TokenType: %d", t))
+
+	panic(fmt.Sprintf("Invalid TokenType: %d", t))
 }
 
 type Token struct {

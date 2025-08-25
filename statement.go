@@ -11,6 +11,7 @@ type VarDecl struct {
 	name Token
 	expr Expr
 }
+
 func (*VarDecl) isStmt() {}
 func (d VarDecl) String() string {
 	return "var " + d.name.lexeme + " = " + d.expr.String() + ";"
@@ -19,6 +20,7 @@ func (d VarDecl) String() string {
 type ExprStmt struct {
 	expr Expr
 }
+
 func (*ExprStmt) isStmt() {}
 func (e ExprStmt) String() string {
 	return e.expr.String() + ";"
@@ -27,6 +29,7 @@ func (e ExprStmt) String() string {
 type PrintStmt struct {
 	expr Expr
 }
+
 func (*PrintStmt) isStmt() {}
 func (p PrintStmt) String() string {
 	return "print " + p.expr.String() + ";"
@@ -35,6 +38,7 @@ func (p PrintStmt) String() string {
 type Block struct {
 	stmts []Stmt
 }
+
 func (*Block) isStmt() {}
 func (b Block) String() string {
 	s := ""
