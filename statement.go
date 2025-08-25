@@ -31,3 +31,15 @@ func (*PrintStmt) isStmt() {}
 func (p PrintStmt) String() string {
 	return "print " + p.expr.String() + ";"
 }
+
+type Block struct {
+	stmts []Stmt
+}
+func (*Block) isStmt() {}
+func (b Block) String() string {
+	s := ""
+	for _, stmt := range b.stmts {
+		s += (stmt.String() + "\n")
+	}
+	return s
+}

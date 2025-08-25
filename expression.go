@@ -104,6 +104,16 @@ func (u Unary) String() string {
 	return parenthesize(u.op.lexeme, u.rhs)
 }
 
+type Postfix struct {
+	lhs Expr
+	op  Token
+}
+
+func (*Postfix) isExpr() {}
+func (p Postfix) String() string {
+	return parenthesize(p.op.lexeme, p.lhs)
+}
+
 type Variable struct {
 	name Token
 }

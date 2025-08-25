@@ -24,6 +24,10 @@ const (
 	STAR
 	EQUAL
 
+	// PREFIX/POSTFIX MATH OPS (ADDED)
+	PLUS_PLUS
+	MINUS_MINUS
+
 	// Comparison operators
 	EQUAL_EQUAL
 	BANG_EQUAL

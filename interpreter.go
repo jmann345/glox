@@ -13,13 +13,11 @@ func (e *RuntimeError) Error() string {
 }
 
 type Interpreter struct {
-	env Environment
+	env *Environment
 }
 
 func NewInterpreter() *Interpreter {
-	return &Interpreter{
-		Environment{nil, make(map[string]any)},
-	}
+	return &Interpreter{NewEnvironment(nil)}
 }
 
 func (i *Interpreter) Interpret(stmts ...Stmt) ([]any, []error) {
@@ -52,6 +50,22 @@ func (i *Interpreter) execute(stmt Stmt) (any, error) {
 		}
 
 		fmt.Println(Stringify(value))
+
+		return nil, nil
+	case *Block:
+		prevEnv := i.env
+
+		i.env = NewEnvironment(prevEnv)
+		defer func() { i.env = prevEnv }() // ensure restoration even on error
+
+		for _, stmt := range s.stmts {
+			_, err := i.execute(stmt)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		i.env = prevEnv
 
 		return nil, nil
 	default:
@@ -90,6 +104,8 @@ func (i *Interpreter) evaluate(expr Expr) (any, error) {
 		return val, nil // not sure if we need to return e.value
 	case *Unary:
 		return i.evalUnary(e)
+	case *Postfix:
+		return i.evalPostfix(e)
 	case *Binary:
 		return i.evalBinary(e)
 	case *IfExpr:
@@ -125,15 +141,127 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 		if !ok {
 			return nil, &RuntimeError{
 				tok: expr.op,
-				msg: "'-' Operand must be a float64",
+				msg: "'-' Operand must be a number",
 			}
 		}
 
 		return -rhs, nil
+	// ++/--: Update the value of the variable, return the new value
+	case MINUS_MINUS:
+		// NOTE:
+		// Using expr.rhs here is a bit confusing
+		// NOT and MINUS need to evaluate rhs and check the type
+		// But the increment/decrement operators need to both
+		// Check that the rhs is a VARIABLE, AND THEN check
+		// if it evaluates to a number
+		// TODO: This would be much nicer with a proper type system!
+		varExpr, ok := expr.rhs.(*Variable)
+		if !ok {
+			return nil, &RuntimeError{
+				tok: expr.op,
+				msg: "Expression is not assignable",
+			}
+		}
+
+		key := varExpr.name.lexeme
+		_, ok = i.env.get(key)
+		if !ok {
+			return nil, &RuntimeError{
+				varExpr.name,
+				"Use of undeclared identifier '" + key + "'",
+			}
+		}
+
+		val, ok := rhs.(float64)
+		if !ok {
+			return nil, &RuntimeError{
+				tok: expr.op,
+				msg: "'--' Operand must be a number",
+			}
+		}
+
+
+		i.env.set(key, val-1)
+		
+		return val-1, nil
+	case PLUS_PLUS:
+		varExpr, ok := expr.rhs.(*Variable)
+		if !ok {
+			return nil, &RuntimeError{
+				tok: expr.op,
+				msg: "Expression is not assignable",
+			}
+		}
+
+		key := varExpr.name.lexeme
+		_, ok = i.env.get(key)
+		if !ok {
+			return nil, &RuntimeError{
+				varExpr.name,
+				"Use of undeclared identifier '" + key + "'",
+			}
+		}
+
+		val, ok := rhs.(float64)
+		if !ok {
+			return nil, &RuntimeError{
+				tok: expr.op,
+				msg: "'++' Operand must be a number",
+			}
+		}
+
+
+		i.env.set(key, val+1)
+		
+		return val+1, nil
 	default:
 		panic(fmt.Sprintf(
 			"Unreachable: unexpected unary operand: %v", expr.op))
 	}
+}
+
+func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
+	lhs, err := i.evaluate(expr.lhs)
+	if err != nil {
+		return nil, err
+	}
+
+	ident, ok := expr.lhs.(*Variable)
+	if !ok {
+		return nil, &RuntimeError{
+			tok: expr.op,
+			msg: "Expression is not assignable",
+		}
+	}
+
+	key := ident.name.lexeme
+	_, ok = i.env.get(key)
+	if !ok {
+		return nil, &RuntimeError{
+			ident.name,
+			"Use of undeclared identifier '" + key + "'",
+		}
+	}
+
+	
+	val, ok := lhs.(float64)
+	if !ok {
+		return nil, &RuntimeError{
+			tok: expr.op,
+			msg: "'" + expr.op.lexeme + "' Operand must be a number",
+		}
+	}
+
+	switch expr.op.typ {
+	case MINUS_MINUS:
+		i.env.set(key, val-1)
+	case PLUS_PLUS:
+		i.env.set(key, val+1)
+	default:
+		panic("Unreachable.")
+	}
+
+	return val, nil
 }
 
 // TODO: Split into:

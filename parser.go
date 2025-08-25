@@ -84,7 +84,7 @@ func (p *Parser) parseVarDecl() (Stmt, error) {
 	*/
 	var initializer Expr = &Literal{nil}
 	if p.peekToken().typ == EQUAL {
-		p.current++
+		p.current++ // consume '='
 
 		initializer, err = p.parseExpression()
 		if err != nil {
@@ -100,16 +100,40 @@ func (p *Parser) parseVarDecl() (Stmt, error) {
 	return &VarDecl{name, initializer}, nil
 }
 
-// statement ::= exprStmt | printStmt
+// statement ::= exprStmt | printStmt | block
 func (p *Parser) parseStatement() (Stmt, error) {
-	if p.peekToken().typ == PRINT {
-		p.current++ // consume PRINT token
+	switch p.peekToken().typ {
+	case PRINT:
+		p.current++ // consume 'print'
 		return p.parsePrintStmt()
+	case LEFT_BRACE:
+		p.current++ // consume '{'
+		return p.parseBlock()
+	default:
+		return p.parseExprStmt()
 	}
-
-	return p.parseExprStmt()
 }
 
+// block ::= "{" statement* "}"
+func (p *Parser) parseBlock() (Stmt, error) {
+	stmts := []Stmt{}
+
+	for !p.peekIsOneOf(RIGHT_BRACE, EOF) {
+		stmt, err := p.parseDeclaration()
+		if err != nil {
+			return nil, err
+		}
+
+		stmts = append(stmts, stmt)
+	}
+
+	err := p.consumeToken(RIGHT_BRACE, "Expect '}' after block.")
+	if err != nil {
+		return nil, err
+	}
+
+	return &Block{stmts}, nil
+}
 
 // exprStmt ::= expression ";"
 func (p *Parser) parseExprStmt() (Stmt, error) {
@@ -267,13 +291,10 @@ func (p *Parser) parseIfExpr() (Expr, error) {
 
 // equality ::= comparison ( ('!=' | '==') comparison )*
 func (p *Parser) parseEquality() (Expr, error) {
-	if p.peekIsOneOf(BANG_EQUAL, EQUAL_EQUAL) {
-		tok := p.peekToken()
-		p.current++
-
+	if tok, ok := p.consumeOneOf(BANG_EQUAL, EQUAL_EQUAL); ok {
 		_, _ = p.parseComparison()
 
-		err := &ParseError{tok,
+		err := &ParseError{*tok,
 			"Missing left-hand operand for '" + tok.lexeme + "'"}
 		return nil, err
 	}
@@ -305,13 +326,12 @@ func (p *Parser) parseComparison() (Expr, error) {
 	// if (tok := self.peekToken()) in (
 	//     GREATER, GREATER_EQUAL, LESS, LESS_EQUAL
 	// ): ...
-	if p.peekIsOneOf(GREATER, GREATER_EQUAL, LESS, LESS_EQUAL) {
-		tok := p.peekToken()
-		p.current++
-
+	if tok, ok := p.consumeOneOf(
+		GREATER, GREATER_EQUAL, LESS, LESS_EQUAL,
+	); ok {
 		_, _ = p.parseTerm()
 
-		err := &ParseError{tok,
+		err := &ParseError{*tok,
 			"Missing left-hand operand for '" + tok.lexeme + "'"}
 		return nil, err
 	}
@@ -370,13 +390,10 @@ func (p *Parser) parseTerm() (Expr, error) {
 
 // factor ::= unary ( ( '*' | '/' ) unary )*
 func (p *Parser) parseFactor() (Expr, error) {
-	if p.peekIsOneOf(STAR, SLASH) {
-		tok := p.peekToken()
-		p.current++
-
+	if tok, ok := p.consumeOneOf(STAR, SLASH); ok {
 		_, _ = p.parseUnary()
 
-		err := &ParseError{tok,
+		err := &ParseError{*tok,
 			"Missing left-hand operand for '" + tok.lexeme + "'"}
 		return nil, err
 	}
@@ -401,20 +418,35 @@ func (p *Parser) parseFactor() (Expr, error) {
 	return expr, nil
 }
 
-// unary ::= ( ( 'not' | '-' ) unary ) | primary
+// unary ::= ( ( 'not' | '-' | '--' | '++' ) unary ) | postfix
 func (p *Parser) parseUnary() (Expr, error) {
-	if p.peekIsOneOf(NOT, MINUS) {
-		op := p.peekToken()
-		p.current++
-
+	if op, ok := p.consumeOneOf(NOT, MINUS, MINUS_MINUS, PLUS_PLUS,); ok {
 		rhs, err := p.parseUnary()
 		if err != nil {
 			return nil, err
 		}
 
-		return &Unary{op, rhs}, nil
+		return &Unary{*op, rhs}, nil
 	}
-	return p.parsePrimary()
+
+	return p.parsePostfix()
+}
+
+// postfix ::= primary ( '--' | '++' )?
+func (p *Parser) parsePostfix() (Expr, error) {
+	lhs, err := p.parsePrimary()
+	if err != nil {
+		return nil, err
+	}
+
+	// x++++ fails in the semantic pass
+	for {
+		if op, ok := p.consumeOneOf(MINUS_MINUS, PLUS_PLUS); ok {
+			lhs = &Postfix{lhs, *op}
+		} else {
+			return lhs, nil
+		}
+	}
 }
 
 /*
@@ -477,4 +509,17 @@ func (p *Parser) consumeToken(typ TokenType, message string) error {
 		return nil
 	}
 	return &ParseError{tok, message}
+}
+
+func (p *Parser) consumeOneOf(types ...TokenType) (*Token, bool) {
+	tok := p.peekToken()
+
+	for _, typ := range types {
+		if tok.typ == typ {
+			p.current++
+			return &tok, true
+		}
+	}
+
+	return nil, false
 }

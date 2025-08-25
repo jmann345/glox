@@ -1,9 +1,6 @@
 package main
 
-import (
-	"slices"
-	"strconv"
-)
+import "strconv"
 
 var keywords = map[string]TokenType{
 	"and":    AND,
@@ -79,9 +76,17 @@ func (t *Tokenizer) scanToken() error {
 	case '.':
 		t.addToken(DOT, nil)
 	case '-':
-		t.addToken(MINUS, nil)
+		if t.match('-') {
+			t.addToken(MINUS_MINUS, nil)
+		} else {
+			t.addToken(MINUS, nil)
+		}
 	case '+':
-		t.addToken(PLUS, nil)
+		if t.match('+') {
+			t.addToken(PLUS_PLUS, nil)
+		} else {
+			t.addToken(PLUS, nil)
+		}
 	case ';':
 		t.addToken(SEMICOLON, nil)
 	case '*':
@@ -204,10 +209,6 @@ func (t *Tokenizer) peekMatches(s string) bool {
 		return false
 	}
 	return t.source[t.current:t.current+len(s)] == s
-}
-
-func (t *Tokenizer) peekMatchesOneOf(ss ...string) bool {
-	return slices.ContainsFunc(ss, t.peekMatches)
 }
 
 func (t *Tokenizer) scanString() error {
