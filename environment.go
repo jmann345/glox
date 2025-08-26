@@ -29,7 +29,9 @@ func (e *Environment) Set(key string, value any) {
 func (e *Environment) SetInScope(key string, value any) {
 	for _, ok := e.values[key]; !ok; _, ok = e.values[key] {
 		e = e.enclosing
-		if e == nil { panic("Unreachable.") }
+		if e == nil {
+			panic("Unreachable.")
+		}
 
 		_, ok = e.values[key]
 	}

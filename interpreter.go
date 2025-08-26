@@ -62,7 +62,7 @@ func (i *Interpreter) execute(stmt Stmt) error {
 		prevEnv := i.env
 
 		i.env = NewEnvironment(prevEnv)
-		defer func() { i.env = prevEnv }()  // ensure restoration even on error
+		defer func() { i.env = prevEnv }() // ensure restoration even on error
 
 		for _, stmt := range s.stmts {
 			err := i.execute(stmt)
@@ -88,7 +88,7 @@ func (i *Interpreter) execIfStmt(stmt IfStmt) error {
 		return err
 	}
 
-	condValBool, ok := condVal.(bool); 
+	condValBool, ok := condVal.(bool)
 	if !ok {
 		return &RuntimeError{
 			stmt.token,
@@ -98,7 +98,7 @@ func (i *Interpreter) execIfStmt(stmt IfStmt) error {
 
 	if condValBool {
 		return i.execute(stmt.thenBranch)
-	} 
+	}
 
 	if stmt.elseBranch != nil {
 		return i.execute(stmt.elseBranch)
@@ -113,7 +113,7 @@ func (i *Interpreter) execWhileStmt(stmt WhileStmt) error {
 		return err
 	}
 
-	condValBool, ok := condVal.(bool); 
+	condValBool, ok := condVal.(bool)
 	if !ok {
 		return &RuntimeError{
 			stmt.token,
@@ -131,14 +131,14 @@ func (i *Interpreter) execWhileStmt(stmt WhileStmt) error {
 			return err
 		}
 
-		condValBool, ok = condVal.(bool); 
+		condValBool, ok = condVal.(bool)
 		if !ok { // With a better type system, we wouldn't have to check this every time!
 			return &RuntimeError{
 				stmt.token,
 				"Condition of 'while' must be boolean.",
 			}
 		}
-	} 
+	}
 
 	return nil
 }
@@ -160,7 +160,7 @@ func (i *Interpreter) execForStmt(stmt ForStmt) error {
 			return err
 		}
 
-		condValBool, ok := condVal.(bool); 
+		condValBool, ok := condVal.(bool)
 		if !ok {
 			return &RuntimeError{
 				stmt.token,
@@ -179,7 +179,7 @@ func (i *Interpreter) execForStmt(stmt ForStmt) error {
 		if _, err = i.evaluate(stmt.increment); err != nil {
 			return err
 		}
-	} 
+	}
 
 	return nil
 }

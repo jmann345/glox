@@ -67,9 +67,9 @@ func (i IfStmt) String() string {
 }
 
 type WhileStmt struct {
-	token      Token
-	condition  Expr
-	body 	   Stmt
+	token     Token
+	condition Expr
+	body      Stmt
 }
 
 func (*WhileStmt) isStmt() {}
@@ -87,11 +87,11 @@ func (w WhileStmt) String() string {
 }
 
 type ForStmt struct {
-	token      Token
+	token       Token
 	initializer Stmt
 	condition   Expr
 	increment   Expr // increment clause
-	body 	    Stmt
+	body        Stmt
 }
 
 func (*ForStmt) isStmt() {}

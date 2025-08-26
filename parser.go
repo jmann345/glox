@@ -251,9 +251,10 @@ func (p *Parser) parseWhileStmt() (Stmt, error) {
 }
 
 // for ::= "for" ( varDecl | exprStmt | ";" )
-//               expression? ";"
-//               expression?
-//				 block
+//
+//	              expression? ";"
+//	              expression?
+//					 block
 func (p *Parser) parseForStmt() (Stmt, error) {
 	tok := p.peekToken()
 
