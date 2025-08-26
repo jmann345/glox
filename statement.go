@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type Stmt interface {
 	isStmt()
@@ -33,6 +36,76 @@ type PrintStmt struct {
 func (*PrintStmt) isStmt() {}
 func (p PrintStmt) String() string {
 	return "print " + p.expr.String() + ";"
+}
+
+type IfStmt struct {
+	token      Token
+	condition  Expr
+	thenBranch Stmt
+	elseBranch Stmt
+}
+
+func (*IfStmt) isStmt() {}
+func (i IfStmt) String() string {
+	var sb strings.Builder
+
+	sb.WriteString("if ")
+	sb.WriteString(i.condition.String())
+	sb.WriteByte('{')
+	sb.WriteString(i.thenBranch.String())
+	sb.WriteByte('}')
+
+	if i.elseBranch != nil {
+		// Technically, this have different logic for "else" and "else if"
+		// branches. Braces won't be shown correctly on else branches.
+		// But I won't fix it for now
+		sb.WriteString("else ")
+		sb.WriteString(i.elseBranch.String())
+	}
+
+	return sb.String()
+}
+
+type WhileStmt struct {
+	token      Token
+	condition  Expr
+	body 	   Stmt
+}
+
+func (*WhileStmt) isStmt() {}
+func (w WhileStmt) String() string {
+	var sb strings.Builder
+
+	sb.WriteString("while ")
+	sb.WriteString(w.condition.String())
+	sb.WriteByte('{')
+	sb.WriteByte('\n')
+	sb.WriteString(w.body.String())
+	sb.WriteByte('}')
+
+	return sb.String()
+}
+
+type ForStmt struct {
+	token      Token
+	initializer Stmt
+	condition   Expr
+	increment   Expr // increment clause
+	body 	    Stmt
+}
+
+func (*ForStmt) isStmt() {}
+func (w ForStmt) String() string {
+	var sb strings.Builder
+
+	sb.WriteString("for ")
+	sb.WriteString(fmt.Sprintf("%s; %s; %s", w.initializer, w.condition, w.increment))
+	sb.WriteByte('{')
+	sb.WriteByte('\n')
+	sb.WriteString(w.body.String())
+	sb.WriteByte('}')
+
+	return sb.String()
 }
 
 type Block struct {

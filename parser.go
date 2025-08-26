@@ -17,6 +17,14 @@ func (e *ParseError) Error() string {
 	return fmt.Sprintf("%d at '%s'\n%s", e.tok.line, e.tok.lexeme, e.msg)
 }
 
+// NOTE:
+// I am not in love with the current implementation as described in the book
+// Namely, my issue is how we attempt to parse each expression
+// in the chain of precendence without a dispatch function
+// For example, we should only be parsing an if expr if we see an IF token
+// And that could easily be handled by a function that dispatches to the
+// relevant grammar rule based on the peeked token
+
 type Parser struct {
 	tokens  []Token
 	current int
@@ -52,7 +60,6 @@ func (p *Parser) parseDeclaration() (Stmt, error) {
 	var stmt Stmt
 	var err error
 	if p.peekToken().typ == VAR {
-		p.current++ // consume "var"
 		stmt, err = p.parseVarDecl()
 	} else {
 		stmt, err = p.parseStatement()
@@ -68,8 +75,13 @@ func (p *Parser) parseDeclaration() (Stmt, error) {
 
 // varDecl ::= "var" IDENTIFIER ( "=" expression )? ";"
 func (p *Parser) parseVarDecl() (Stmt, error) {
+	err := p.consumeToken(VAR, "Expect identifier 'var'.")
+	if err != nil {
+		return nil, err
+	}
+
 	name := p.peekToken()
-	err := p.consumeToken(IDENTIFIER, "Invalid Identifier.")
+	err = p.consumeToken(IDENTIFIER, "Invalid Identifier.")
 	if err != nil {
 		return nil, err
 	}
@@ -99,14 +111,18 @@ func (p *Parser) parseVarDecl() (Stmt, error) {
 	return &VarDecl{name, initializer}, nil
 }
 
-// statement ::= exprStmt | printStmt | block
+// statement ::= exprStmt | printStmt | ifStmt | block
 func (p *Parser) parseStatement() (Stmt, error) {
 	switch p.peekToken().typ {
 	case PRINT:
-		p.current++ // consume 'print'
 		return p.parsePrintStmt()
+	case IF:
+		return p.parseIfStmt()
+	case WHILE:
+		return p.parseWhileStmt()
+	case FOR:
+		return p.parseForStmt()
 	case LEFT_BRACE:
-		p.current++ // consume '{'
 		return p.parseBlock()
 	default:
 		return p.parseExprStmt()
@@ -115,6 +131,11 @@ func (p *Parser) parseStatement() (Stmt, error) {
 
 // block ::= "{" statement* "}"
 func (p *Parser) parseBlock() (Stmt, error) {
+	err := p.consumeToken(LEFT_BRACE, "Expect '{' before block.")
+	if err != nil {
+		return nil, err
+	}
+
 	stmts := []Stmt{}
 
 	for !p.peekIsOneOf(RIGHT_BRACE, EOF) {
@@ -126,7 +147,7 @@ func (p *Parser) parseBlock() (Stmt, error) {
 		stmts = append(stmts, stmt)
 	}
 
-	err := p.consumeToken(RIGHT_BRACE, "Expect '}' after block.")
+	err = p.consumeToken(RIGHT_BRACE, "Expect '}' after block.")
 	if err != nil {
 		return nil, err
 	}
@@ -151,6 +172,11 @@ func (p *Parser) parseExprStmt() (Stmt, error) {
 
 // print ::= "print" value ";"
 func (p *Parser) parsePrintStmt() (Stmt, error) {
+	err := p.consumeToken(PRINT, "Expect 'print' statement.")
+	if err != nil {
+		return nil, err
+	}
+
 	value, err := p.parseExpression()
 	if err != nil {
 		return nil, err
@@ -162,6 +188,118 @@ func (p *Parser) parsePrintStmt() (Stmt, error) {
 	}
 
 	return &PrintStmt{value}, nil
+}
+
+// if ::= "if" expression block ( "else" ( block | ifStmt ) )?
+// NOTE: My ifStmt grammar is different from original lox implementation
+func (p *Parser) parseIfStmt() (Stmt, error) {
+	tok := p.peekToken()
+
+	err := p.consumeToken(IF, "Expect 'if' statement.")
+	if err != nil {
+		return nil, err
+	}
+
+	cond, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	thenStmt, err := p.parseBlock()
+	if err != nil {
+		return nil, err
+	}
+
+	var elseStmt Stmt = nil
+	if p.peekToken().typ == ELSE {
+		p.current++ // consume "else"
+
+		if p.peekToken().typ == IF {
+			elseStmt, err = p.parseIfStmt()
+		} else {
+			elseStmt, err = p.parseBlock()
+		}
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &IfStmt{tok, cond, thenStmt, elseStmt}, nil
+}
+
+// while ::= "while" expression block
+func (p *Parser) parseWhileStmt() (Stmt, error) {
+	tok := p.peekToken()
+
+	err := p.consumeToken(WHILE, "Expect 'while' statement.")
+	if err != nil {
+		return nil, err
+	}
+
+	cond, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	block, err := p.parseBlock()
+	if err != nil {
+		return nil, err
+	}
+
+	return &WhileStmt{tok, cond, block}, nil
+}
+
+// for ::= "for" ( varDecl | exprStmt | ";" )
+//               expression? ";"
+//               expression?
+//				 block
+func (p *Parser) parseForStmt() (Stmt, error) {
+	tok := p.peekToken()
+
+	err := p.consumeToken(FOR, "Expect 'for' statement.")
+	if err != nil {
+		return nil, err
+	}
+
+	var initializer Stmt
+	switch tok := p.peekToken(); tok.typ {
+	case SEMICOLON:
+		p.current++ // consume ';'
+		initializer = nil
+	case VAR:
+		initializer, err = p.parseVarDecl()
+	default:
+		initializer, err = p.parseExprStmt()
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var condition Expr = nil
+	if p.peekToken().typ != SEMICOLON {
+		condition, err = p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	p.consumeToken(SEMICOLON, "Expect ';' after 'for' condition.")
+
+	var increment Expr = nil
+	if p.peekToken().typ != LEFT_BRACE {
+		increment, err = p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	body, err := p.parseBlock()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ForStmt{tok, initializer, condition, increment, body}, nil
 }
 
 // expression ::= assignment
@@ -228,12 +366,12 @@ func (p *Parser) parseComma() (Expr, error) {
 
 // CHALLENGE 2: Add ternary operator
 // (I opted to do add the rust-style if expr instead)
-// ifExpr ::= equality | 'if' equality { expr } 'else' ( { expr } | ifExpr )
+// ifExpr ::= logicalOr | 'if' logicalOr { expr } 'else' ( { expr } | ifExpr )
 func (p *Parser) parseIfExpr() (Expr, error) {
 	if tok := p.peekToken(); tok.typ == IF {
 		p.current++
 
-		cond, err := p.parseEquality()
+		cond, err := p.parseLogicalOr()
 		if err != nil {
 			return nil, err
 		}
@@ -284,7 +422,67 @@ func (p *Parser) parseIfExpr() (Expr, error) {
 		return &IfExpr{tok, cond, thenExpr, elseExpr}, nil
 	}
 
-	return p.parseEquality()
+	return p.parseLogicalOr()
+}
+
+// logicalOr ::= logicalAnd ( "or" logicalAnd )*
+func (p *Parser) parseLogicalOr() (Expr, error) {
+	if tok, ok := p.consumeOneOf(OR); ok {
+		_, _ = p.parseLogicalAnd()
+
+		err := &ParseError{*tok,
+			"Missing left-hand operand for '" + tok.lexeme + "'"}
+		return nil, err
+	}
+
+	expr, err := p.parseLogicalAnd()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.peekToken().typ == OR {
+		p.current++ // consume "or"
+		op := p.tokens[p.current-1]
+
+		rhs, err := p.parseLogicalAnd()
+		if err != nil {
+			return nil, err
+		}
+
+		expr = &Binary{expr, op, rhs}
+	}
+
+	return expr, nil
+}
+
+// logic_or ::= equality ( "and" equality )*
+func (p *Parser) parseLogicalAnd() (Expr, error) {
+	if tok, ok := p.consumeOneOf(AND); ok {
+		_, _ = p.parseEquality()
+
+		err := &ParseError{*tok,
+			"Missing left-hand operand for '" + tok.lexeme + "'"}
+		return nil, err
+	}
+
+	expr, err := p.parseEquality()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.peekToken().typ == AND {
+		p.current++ // consume "or"
+		op := p.tokens[p.current-1]
+
+		rhs, err := p.parseEquality()
+		if err != nil {
+			return nil, err
+		}
+
+		expr = &Binary{expr, op, rhs}
+	}
+
+	return expr, nil
 }
 
 // equality ::= comparison ( ('!=' | '==') comparison )*
@@ -307,12 +505,13 @@ func (p *Parser) parseEquality() (Expr, error) {
 	// NOTE: 'a < b < c' is currently unsupported tho :(
 	for p.peekIsOneOf(BANG_EQUAL, EQUAL_EQUAL) {
 		p.current++
-
 		op := p.tokens[p.current-1]
+
 		rhs, err := p.parseComparison()
 		if err != nil {
 			return nil, err
 		}
+
 		expr = &Binary{expr, op, rhs}
 	}
 
@@ -510,13 +709,9 @@ func (p *Parser) consumeToken(typ TokenType, message string) error {
 }
 
 func (p *Parser) consumeOneOf(types ...TokenType) (*Token, bool) {
-	tok := p.peekToken()
-
-	for _, typ := range types {
-		if tok.typ == typ {
-			p.current++
-			return &tok, true
-		}
+	if tok := p.peekToken(); slices.Contains(types, tok.typ) {
+		p.current++
+		return &tok, true
 	}
 
 	return nil, false

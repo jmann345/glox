@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -68,8 +69,8 @@ func runFile(path string) error {
 func runPrompt() error {
 	reader := bufio.NewReader(os.Stdin)
 	interpreter := NewInterpreter()
-	for {
-		fmt.Print(":> ")
+	for i := 1; ; i++ {
+		fmt.Print("[" + strconv.Itoa(i) + "] ")
 
 		line, err := reader.ReadString('\n')
 		if err != nil {
@@ -86,7 +87,6 @@ func runPrompt() error {
 	return nil
 }
 
-// TODO: Add `context *CodeContext` parameter (maybe in shell mode only)
 func run(source string, interpreter *Interpreter) {
 	tokenizer := new(Tokenizer)
 	tokenizer.Init(source)
@@ -104,14 +104,11 @@ func run(source string, interpreter *Interpreter) {
 		}
 
 		// TODO: multi-line interpretation
-		vals, errs := interpreter.Interpret(stmt)
-		val, err := vals[0], errs[0]
+		errs := interpreter.Interpret(stmt)
+		err = errs[0]
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Runtime:", err)
 			// os.Exit(70) <-- Should only happen if running script tho
-		} else {
-			fmt.Println("expr: " + stmt.String())
-			fmt.Println(val)
 		}
 	}
 }
