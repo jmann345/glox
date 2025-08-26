@@ -81,8 +81,8 @@ func (p *Parser) parseVarDecl() (Stmt, error) {
 	}
 
 	name := p.peekToken()
-	err = p.consumeToken(IDENTIFIER, "Invalid Identifier.")
-	if err != nil {
+
+	if err = p.consumeToken(IDENTIFIER, "Invalid Identifier."); err != nil {
 		return nil, err
 	}
 
@@ -172,8 +172,7 @@ func (p *Parser) parseExprStmt() (Stmt, error) {
 
 // print ::= "print" value ";"
 func (p *Parser) parsePrintStmt() (Stmt, error) {
-	err := p.consumeToken(PRINT, "Expect 'print' statement.")
-	if err != nil {
+	if err := p.consumeToken(PRINT, "Expect 'print' statement."); err != nil {
 		return nil, err
 	}
 
@@ -182,8 +181,7 @@ func (p *Parser) parsePrintStmt() (Stmt, error) {
 		return nil, err
 	}
 
-	err = p.consumeToken(SEMICOLON, "Expect ';' after value.")
-	if err != nil {
+	if err = p.consumeToken(SEMICOLON, "Expect ';' after value."); err != nil {
 		return nil, err
 	}
 
@@ -195,8 +193,7 @@ func (p *Parser) parsePrintStmt() (Stmt, error) {
 func (p *Parser) parseIfStmt() (Stmt, error) {
 	tok := p.peekToken()
 
-	err := p.consumeToken(IF, "Expect 'if' statement.")
-	if err != nil {
+	if err := p.consumeToken(IF, "Expect 'if' statement."); err != nil {
 		return nil, err
 	}
 
