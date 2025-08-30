@@ -12,7 +12,7 @@ type Stmt interface {
 
 type NoOpStmt struct{}
 
-func (*NoOpStmt) isStmt() {}
+func (NoOpStmt) isStmt() {}
 func (n NoOpStmt) String() string {
 	return "no-op"
 }
@@ -22,7 +22,7 @@ type VarDecl struct {
 	expr Expr
 }
 
-func (*VarDecl) isStmt() {}
+func (VarDecl) isStmt() {}
 func (d VarDecl) String() string {
 	return "var " + d.name.lexeme + " = " + d.expr.String() + ";"
 }
@@ -33,7 +33,7 @@ type FunDecl struct {
 	body   Stmt // NOTE: book uses []Stmt, but `body` is always a Block stmt
 }
 
-func (*FunDecl) isStmt() {}
+func (FunDecl) isStmt() {}
 func (f FunDecl) String() string {
 	return f.name.lexeme
 }
@@ -42,7 +42,7 @@ type ExprStmt struct {
 	expr Expr
 }
 
-func (*ExprStmt) isStmt() {}
+func (ExprStmt) isStmt() {}
 func (e ExprStmt) String() string {
 	return e.expr.String() + ";"
 }
@@ -51,7 +51,7 @@ type PrintStmt struct {
 	expr Expr
 }
 
-func (*PrintStmt) isStmt() {}
+func (PrintStmt) isStmt() {}
 func (p PrintStmt) String() string {
 	return "print " + p.expr.String() + ";"
 }
@@ -63,7 +63,7 @@ type IfStmt struct {
 	elseBranch Stmt
 }
 
-func (*IfStmt) isStmt() {}
+func (IfStmt) isStmt() {}
 func (i IfStmt) String() string {
 	var sb strings.Builder
 
@@ -90,7 +90,7 @@ type WhileStmt struct {
 	body      Stmt
 }
 
-func (*WhileStmt) isStmt() {}
+func (WhileStmt) isStmt() {}
 func (w WhileStmt) String() string {
 	var sb strings.Builder
 
@@ -112,7 +112,7 @@ type ForStmt struct {
 	body        Stmt
 }
 
-func (*ForStmt) isStmt() {}
+func (ForStmt) isStmt() {}
 func (w ForStmt) String() string {
 	var sb strings.Builder
 
@@ -130,7 +130,7 @@ type Block struct {
 	stmts []Stmt
 }
 
-func (*Block) isStmt() {}
+func (Block) isStmt() {}
 func (b Block) String() string {
 	s := ""
 	for _, stmt := range b.stmts {

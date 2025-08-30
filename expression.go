@@ -26,7 +26,7 @@ func parenthesize(name string, exprs ...Expr) string {
 
 type NoOpExpr struct{}
 
-func (*NoOpExpr) isExpr() {}
+func (NoOpExpr) isExpr() {}
 func (n NoOpExpr) String() string {
 	return "no-op"
 }
@@ -36,7 +36,7 @@ type Assign struct {
 	value Expr
 }
 
-func (*Assign) isExpr() {}
+func (Assign) isExpr() {}
 func (a Assign) String() string {
 	return parenthesize("assign "+a.name.lexeme, a.value)
 }
@@ -47,7 +47,7 @@ type Binary struct {
 	rhs Expr
 }
 
-func (*Binary) isExpr() {}
+func (Binary) isExpr() {}
 func (b Binary) String() string {
 	return parenthesize(b.op.lexeme, b.lhs, b.rhs)
 }
@@ -58,7 +58,7 @@ type CallExpr struct {
 	arguments []Expr
 }
 
-func (*CallExpr) isExpr() {}
+func (CallExpr) isExpr() {}
 func (c CallExpr) String() string {
 	return parenthesize(
 		c.paren.lexeme,
@@ -73,7 +73,7 @@ type IfExpr struct {
 	elseBranch Expr
 }
 
-func (*IfExpr) isExpr() {}
+func (IfExpr) isExpr() {}
 func (i IfExpr) String() string {
 	return parenthesize(
 		"if "+i.condition.String(), i.thenBranch, i.elseBranch)
@@ -83,7 +83,7 @@ type Grouping struct {
 	expression Expr
 }
 
-func (*Grouping) isExpr() {}
+func (Grouping) isExpr() {}
 func (g Grouping) String() string {
 	return parenthesize("group", g.expression)
 }
@@ -92,7 +92,7 @@ type Literal struct {
 	value any // float, string, boolean, or nil
 }
 
-func (*Literal) isExpr() {}
+func (Literal) isExpr() {}
 func (l Literal) String() string {
 	switch v := l.value.(type) {
 	case string:
@@ -120,7 +120,7 @@ type Unary struct {
 	rhs Expr
 }
 
-func (*Unary) isExpr() {}
+func (Unary) isExpr() {}
 func (u Unary) String() string {
 	return parenthesize(u.op.lexeme, u.rhs)
 }
@@ -130,7 +130,7 @@ type Postfix struct {
 	op  Token
 }
 
-func (*Postfix) isExpr() {}
+func (Postfix) isExpr() {}
 func (p Postfix) String() string {
 	return parenthesize(p.op.lexeme, p.lhs)
 }
@@ -139,7 +139,7 @@ type Variable struct {
 	name Token
 }
 
-func (*Variable) isExpr() {}
+func (Variable) isExpr() {}
 func (v Variable) String() string {
 	return parenthesize(v.name.lexeme)
 }
