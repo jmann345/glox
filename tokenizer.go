@@ -100,7 +100,7 @@ func (t *Tokenizer) scanToken() error {
 		if t.match('=') {
 			t.addToken(BANG_EQUAL, nil)
 		} else {
-			return &LoxError{
+			return LoxError{
 				line:    t.line,
 				where:   "",
 				message: "Unexpected character.",
@@ -144,7 +144,7 @@ func (t *Tokenizer) scanToken() error {
 		case IsAlpha(c):
 			t.scanIdentifierOrKeyword()
 		default:
-			return &LoxError{
+			return LoxError{
 				line:    t.line,
 				where:   "",
 				message: "Unexpected character.",
@@ -217,7 +217,7 @@ func (t *Tokenizer) peekMatches(s string) bool {
 func (t *Tokenizer) scanString() error {
 	for c := t.peekChar(); c != '"'; c = t.peekChar() {
 		if t.current >= len(t.source) {
-			return &LoxError{
+			return LoxError{
 				line:    t.line,
 				where:   "",
 				message: "Unterminated string.",
@@ -251,7 +251,7 @@ func (t *Tokenizer) scanNumber() error {
 	numStr := t.source[t.start:t.current]
 	number, err := strconv.ParseFloat(numStr, 64)
 	if err != nil {
-		return &LoxError{
+		return LoxError{
 			line:    t.line,
 			where:   "",
 			message: "Invalid number.",
@@ -291,7 +291,7 @@ func (t *Tokenizer) scanComment() error {
 			terminated = t.peekAndConsume("]#")
 		}
 		if !terminated {
-			return &LoxError{
+			return LoxError{
 				line:    t.line,
 				where:   "",
 				message: "Unterminated #[ comment.",

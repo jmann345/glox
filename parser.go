@@ -212,7 +212,6 @@ func (p *Parser) parseExprStmt() (Stmt, error) {
 	return ExprStmt{expr}, nil
 }
 
-
 // block ::= "{" declaration* "}"
 func (p *Parser) parseBlock() (Stmt, error) {
 	err := p.consumeToken(LEFT_BRACE, "Expect '{' before block.")
@@ -351,7 +350,10 @@ func (p *Parser) parseForStmt() (Stmt, error) {
 		}
 	}
 
-	p.consumeToken(SEMICOLON, "Expect ';' after 'for' condition.")
+	err = p.consumeToken(SEMICOLON, "Expect ';' after 'for' condition.")
+	if err != nil {
+		return nil, err
+	}
 
 	var increment Expr = NoOpExpr{}
 	if p.peekToken().typ != LEFT_BRACE {
@@ -367,6 +369,31 @@ func (p *Parser) parseForStmt() (Stmt, error) {
 	}
 
 	return ForStmt{tok, initializer, condition, increment, body}, nil
+}
+
+// return ::= "return" expression? ";"
+func (p *Parser) parseReturnStmt() (Stmt, error) {
+	if err := p.consumeToken(RETURN, "Expect return."); err != nil {
+		return nil, err
+	}
+
+	keyword := p.tokens[p.current-1]
+	var value Expr = nil
+
+	if p.peekToken().typ != SEMICOLON {
+		var err error // necessary so `value` doesn't get shadowed
+		value, err = p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err := p.consumeToken(SEMICOLON, "Expect ';' after return value.")
+	if err != nil {
+		return nil, err
+	}
+
+	return ReturnStmt{keyword, value}, nil
 }
 
 // expression ::= assignment
@@ -389,7 +416,7 @@ func (p *Parser) parseAssignment() (Expr, error) {
 			return nil, err
 		}
 
-		if expr, ok := expr.(*Variable); ok {
+		if expr, ok := expr.(Variable); ok {
 			return Assign{expr.name, value}, nil
 		}
 
@@ -542,7 +569,7 @@ func (p *Parser) parseLogicalAnd() (Expr, error) {
 			return nil, err
 		}
 
-		expr = &Binary{expr, op, rhs}
+		expr = Binary{expr, op, rhs}
 	}
 
 	return expr, nil
@@ -575,7 +602,7 @@ func (p *Parser) parseEquality() (Expr, error) {
 			return nil, err
 		}
 
-		expr = &Binary{expr, op, rhs}
+		expr = Binary{expr, op, rhs}
 	}
 
 	return expr, nil
@@ -612,7 +639,7 @@ func (p *Parser) parseComparison() (Expr, error) {
 			return nil, err
 		}
 
-		expr = &Binary{expr, op, rhs}
+		expr = Binary{expr, op, rhs}
 	}
 
 	return expr, nil
@@ -642,7 +669,7 @@ func (p *Parser) parseTerm() (Expr, error) {
 			return nil, err
 		}
 
-		expr = &Binary{expr, op, rhs}
+		expr = Binary{expr, op, rhs}
 	}
 
 	return expr, nil
@@ -672,7 +699,7 @@ func (p *Parser) parseFactor() (Expr, error) {
 			return nil, err
 		}
 
-		expr = &Binary{expr, op, rhs}
+		expr = Binary{expr, op, rhs}
 	}
 
 	return expr, nil
@@ -686,7 +713,7 @@ func (p *Parser) parseUnary() (Expr, error) {
 			return nil, err
 		}
 
-		return &Unary{op, rhs}, nil
+		return Unary{op, rhs}, nil
 	}
 
 	return p.parsePostfix()
@@ -700,7 +727,7 @@ func (p *Parser) parsePostfix() (Expr, error) {
 	}
 
 	if op, ok := p.consumeOneOf(MINUS_MINUS, PLUS_PLUS); ok {
-		return &Postfix{expr, op}, nil
+		return Postfix{expr, op}, nil
 	}
 
 	return expr, nil
@@ -724,7 +751,7 @@ func (p *Parser) parseCall() (Expr, error) {
 			return nil, err
 		}
 
-		return &CallExpr{expr, paren, args}, nil
+		return CallExpr{expr, paren, args}, nil
 	}
 
 	return expr, nil
@@ -775,15 +802,15 @@ func (p *Parser) parseArguments() ([]Expr, error) {
 func (p *Parser) parsePrimary() (Expr, error) {
 	switch tok := p.peekAndConsume(); tok.typ {
 	case NUMBER:
-		return &Literal{tok.literal}, nil
+		return Literal{tok.literal}, nil
 	case STRING:
-		return &Literal{tok.literal}, nil
+		return Literal{tok.literal}, nil
 	case TRUE:
-		return &Literal{true}, nil
+		return Literal{true}, nil
 	case FALSE:
-		return &Literal{false}, nil
+		return Literal{false}, nil
 	case NIL:
-		return &Literal{nil}, nil
+		return Literal{nil}, nil
 	case LEFT_PAREN:
 		expr, err := p.parseExpression()
 		if err != nil {
@@ -795,9 +822,9 @@ func (p *Parser) parsePrimary() (Expr, error) {
 			return nil, err
 		}
 
-		return &Grouping{expr}, nil
+		return Grouping{expr}, nil
 	case IDENTIFIER:
-		return &Variable{tok}, nil
+		return Variable{tok}, nil
 	default:
 		return nil, ParseError{tok, "Expect expression."}
 	}

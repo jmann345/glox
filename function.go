@@ -11,7 +11,9 @@ func (f Function) Call(interpreter *Interpreter, arguments []any) any {
 		localEnv.Set(f.decl.params[i].lexeme, arguments[i])
 	}
 
-	body, ok := f.decl.body.(*Block) // TODO: check if this should be *Block or Block
+	localEnv.Set(f.decl.name.lexeme, f) // Define function in its own scope so recursion works properly
+
+	body, ok := f.decl.body.(Block) // TODO: check if this should be *Block or Block
 	if !ok {
 		panic("Unreachable.")
 	}
@@ -19,12 +21,12 @@ func (f Function) Call(interpreter *Interpreter, arguments []any) any {
 	// TODO: Make this less ugly.
 	// I don't want to have to force every Call implementation
 	// to also return an error.
-	err := interpreter.execBlock(*body, localEnv)
-	if err != nil {
-		return err
+	err := interpreter.execBlock(body, localEnv)
+	if ret, ok := err.(Return); ok {
+		return ret.value
 	}
 
-	return nil
+	return err // Either nil or an error we want to handle
 }
 func (f Function) Arity() int {
 	return len(f.decl.params)

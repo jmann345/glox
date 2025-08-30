@@ -27,50 +27,52 @@ func NewInterpreter() *Interpreter {
 func (i *Interpreter) Interpret(stmts ...Stmt) []error {
 	errs := []error{}
 	for _, stmt := range stmts {
-		err := i.execute(stmt)
+		_, err := i.execute(stmt) // discard return value for now
 		errs = append(errs, err)
 	}
 	return errs
 }
 
-func (i *Interpreter) execute(stmt Stmt) error {
+func (i *Interpreter) execute(stmt Stmt) (any, error) {
 	switch s := stmt.(type) {
-	case *VarDecl:
+	case VarDecl:
 		val, err := i.evaluate(s.expr)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		i.env.Set(s.name.lexeme, val)
 
-		return nil
-	case *ExprStmt:
+		return nil, nil
+	case ExprStmt:
 		_, err := i.evaluate(s.expr)
-		return err
-	case *PrintStmt:
+		return nil, err
+	case PrintStmt:
 		value, err := i.evaluate(s.expr)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		fmt.Println(Stringify(value))
 
-		return nil
-	case *FunDecl:
-		function := Function{*s}
+		return nil, nil
+	case FunDecl:
+		function := Function{s}
 		i.env.Set(s.name.lexeme, function)
 
-		return nil
-	case *Block:
-		return i.execBlock(*s, NewEnvironment(i.env))
-	case *IfStmt:
-		return i.execIfStmt(*s)
-	case *WhileStmt:
-		return i.execWhileStmt(*s)
-	case *ForStmt:
-		return i.execForStmt(*s)
-	case *NoOpStmt: // no-op
-		return nil
+		return nil, nil
+	case Block:
+		return nil, i.execBlock(s, NewEnvironment(i.env))
+	case IfStmt:
+		return nil, i.execIfStmt(s)
+	case WhileStmt:
+		return nil, i.execWhileStmt(s)
+	case ForStmt:
+		return nil, i.execForStmt(s)
+	case ReturnStmt:
+		return nil, i.execReturnStmt(s)
+	case NoOpStmt: // no-op
+		return nil, nil
 	default:
 		panic(fmt.Sprintf(
 			"Unimplemented Statement type: %T", s))
@@ -84,7 +86,7 @@ func (i *Interpreter) execBlock(block Block, env *Environment) error {
 	defer func() { i.env = prevEnv }() // ensure restoration even on error
 
 	for _, stmt := range block.stmts {
-		if err := i.execute(stmt); err != nil {
+		if _, err := i.execute(stmt); err != nil {
 			return err
 		}
 	}
@@ -107,11 +109,13 @@ func (i *Interpreter) execIfStmt(stmt IfStmt) error {
 	}
 
 	if condValBool {
-		return i.execute(stmt.thenBranch)
+		_, err := i.execute(stmt.thenBranch)
+		return err
 	}
 
 	if stmt.elseBranch != nil {
-		return i.execute(stmt.elseBranch)
+		_, err := i.execute(stmt.elseBranch)
+		return err
 	}
 
 	return nil
@@ -132,7 +136,7 @@ func (i *Interpreter) execWhileStmt(stmt WhileStmt) error {
 	}
 
 	for condValBool {
-		if err = i.execute(stmt.body); err != nil {
+		if _, err = i.execute(stmt.body); err != nil {
 			return err
 		}
 
@@ -160,7 +164,7 @@ func (i *Interpreter) execForStmt(stmt ForStmt) error {
 	i.env = NewEnvironment(prevEnv)
 	defer func() { i.env = prevEnv }()
 
-	if err := i.execute(stmt.initializer); err != nil {
+	if _, err := i.execute(stmt.initializer); err != nil {
 		return err
 	}
 
@@ -170,7 +174,7 @@ func (i *Interpreter) execForStmt(stmt ForStmt) error {
 			return err
 		}
 
-		if _, ok := stmt.condition.(*NoOpExpr); !ok {
+		if _, ok := stmt.condition.(NoOpExpr); !ok {
 			condValBool, ok := condVal.(bool)
 			if !ok {
 				return RuntimeError{
@@ -184,7 +188,7 @@ func (i *Interpreter) execForStmt(stmt ForStmt) error {
 			}
 		}
 
-		if err = i.execute(stmt.body); err != nil {
+		if _, err = i.execute(stmt.body); err != nil {
 			return err
 		}
 
@@ -196,11 +200,26 @@ func (i *Interpreter) execForStmt(stmt ForStmt) error {
 	return nil
 }
 
+func (i *Interpreter) execReturnStmt(stmt ReturnStmt) error {
+	var value any = nil
+	var err error = nil
+
+	if stmt.value != nil {
+		value, err = i.evaluate(stmt.value)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return Return{value}
+}
+
 func (i *Interpreter) evaluate(expr Expr) (any, error) {
 	switch e := expr.(type) {
-	case *Literal:
+	case Literal:
 		return e.value, nil
-	case *Variable:
+	case Variable:
 		val, ok := i.env.Get(e.name.lexeme)
 		if !ok {
 			return nil, RuntimeError{
@@ -209,7 +228,7 @@ func (i *Interpreter) evaluate(expr Expr) (any, error) {
 		}
 
 		return val, nil
-	case *Assign:
+	case Assign:
 		if _, ok := i.env.Get(e.name.lexeme); !ok {
 			return nil, RuntimeError{
 				e.name, "Undefined Variable '" + e.name.lexeme + "'.",
@@ -224,19 +243,19 @@ func (i *Interpreter) evaluate(expr Expr) (any, error) {
 		i.env.SetInScope(e.name.lexeme, val)
 
 		return val, nil // not sure if we need to return e.value
-	case *Unary:
+	case Unary:
 		return i.evalUnary(e)
-	case *Postfix:
+	case Postfix:
 		return i.evalPostfix(e)
-	case *Binary:
+	case Binary:
 		return i.evalBinary(e)
-	case *CallExpr:
+	case CallExpr:
 		return i.evalCall(e)
-	case *IfExpr:
+	case IfExpr:
 		return i.evalIfExpr(e)
-	case *Grouping:
+	case Grouping:
 		return i.evaluate(e.expression)
-	case *NoOpExpr:
+	case NoOpExpr:
 		return nil, nil
 	default:
 		panic(fmt.Sprintf(
@@ -244,7 +263,7 @@ func (i *Interpreter) evaluate(expr Expr) (any, error) {
 	}
 }
 
-func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
+func (i *Interpreter) evalUnary(expr Unary) (any, error) {
 	rhs, err := i.evaluate(expr.rhs)
 	if err != nil {
 		return nil, err
@@ -281,7 +300,7 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 		// Check that the rhs is a VARIABLE, AND THEN check
 		// if it evaluates to a number
 		// TODO: This would be much nicer with a proper type system!
-		varExpr, ok := expr.rhs.(*Variable)
+		varExpr, ok := expr.rhs.(Variable)
 		if !ok {
 			return nil, RuntimeError{
 				tok: expr.op,
@@ -310,7 +329,7 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 
 		return val - 1, nil
 	case PLUS_PLUS:
-		varExpr, ok := expr.rhs.(*Variable)
+		varExpr, ok := expr.rhs.(Variable)
 		if !ok {
 			return nil, RuntimeError{
 				tok: expr.op,
@@ -344,13 +363,13 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 	}
 }
 
-func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
+func (i *Interpreter) evalPostfix(expr Postfix) (any, error) {
 	lhs, err := i.evaluate(expr.lhs)
 	if err != nil {
 		return nil, err
 	}
 
-	ident, ok := expr.lhs.(*Variable)
+	ident, ok := expr.lhs.(Variable)
 	if !ok {
 		return nil, RuntimeError{
 			tok: expr.op,
@@ -387,7 +406,7 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 	return val, nil
 }
 
-func (i *Interpreter) evalBinary(expr *Binary) (any, error) {
+func (i *Interpreter) evalBinary(expr Binary) (any, error) {
 	switch expr.op.typ {
 	case COMMA:
 		// discard lhs, return rhs
@@ -415,8 +434,8 @@ func (i *Interpreter) evalBinary(expr *Binary) (any, error) {
 	panic("Unreachable.")
 }
 
-func (i *Interpreter) evalCall(expr *CallExpr) (any, error) {
-	if v, ok := expr.callee.(*Variable); ok {
+func (i *Interpreter) evalCall(expr CallExpr) (any, error) {
+	if v, ok := expr.callee.(Variable); ok {
 		if _, exists := i.env.Get(v.name.lexeme); !exists {
 			return nil, RuntimeError{v.name,
 				"Call to undeclared function '" + v.name.lexeme + "'",
@@ -452,7 +471,7 @@ func (i *Interpreter) evalCall(expr *CallExpr) (any, error) {
 		case string:
 			errMsg = "Called object type 'string' is not a function."
 		default:
-			panic("Unreachable.")
+			panic("Unreachable.") // fallback in case I add more types later
 		}
 		return nil, RuntimeError{expr.paren, errMsg}
 	}
@@ -471,7 +490,7 @@ func (i *Interpreter) evalCall(expr *CallExpr) (any, error) {
 	return val, nil
 }
 
-func (i *Interpreter) evalEquality(expr *Binary) (any, error) {
+func (i *Interpreter) evalEquality(expr Binary) (any, error) {
 	lhs, err := i.evaluate(expr.lhs)
 	if err != nil {
 		return nil, err
@@ -512,7 +531,7 @@ func (i *Interpreter) evalEquality(expr *Binary) (any, error) {
 	panic("Unreachable.")
 }
 
-func (i *Interpreter) evalComparison(expr *Binary) (any, error) {
+func (i *Interpreter) evalComparison(expr Binary) (any, error) {
 	lhs, err := i.evaluate(expr.lhs)
 	if err != nil {
 		return nil, err
@@ -567,7 +586,7 @@ func (i *Interpreter) evalComparison(expr *Binary) (any, error) {
 	panic("Unreachable.")
 }
 
-func (i *Interpreter) evalMath(expr *Binary) (any, error) {
+func (i *Interpreter) evalMath(expr Binary) (any, error) {
 	lhs, err := i.evaluate(expr.lhs)
 	if err != nil {
 		return nil, err
@@ -631,7 +650,7 @@ func (i *Interpreter) evalMath(expr *Binary) (any, error) {
 	panic("Unreachable.")
 }
 
-func (i *Interpreter) evalLogical(expr *Binary) (any, error) {
+func (i *Interpreter) evalLogical(expr Binary) (any, error) {
 	lhs, err := i.evaluate(expr.lhs)
 	if err != nil {
 		return nil, err
@@ -670,7 +689,7 @@ func (i *Interpreter) evalLogical(expr *Binary) (any, error) {
 	panic("Unreachable.")
 }
 
-func (i *Interpreter) evalIfExpr(expr *IfExpr) (any, error) {
+func (i *Interpreter) evalIfExpr(expr IfExpr) (any, error) {
 	cond, err := i.evaluate(expr.condition)
 	if err != nil {
 		return nil, err

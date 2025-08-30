@@ -16,7 +16,7 @@ type LoxError struct {
 	message string
 }
 
-func (e *LoxError) Error() string {
+func (e LoxError) Error() string {
 	return fmt.Sprintf(
 		"[line %d] Error%s: %s",
 		e.line, e.where, e.message,

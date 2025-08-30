@@ -1,0 +1,9 @@
+fun rec(x) {
+    if x <= 0 {
+        return 0;
+    }
+
+    return x + rec(x-1);
+}
+
+print(rec(10));

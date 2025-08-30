@@ -1,11 +1,14 @@
-if true {
+var tmp = if true {
     false
 } else {
     "false"
-}
+};
 
-1,2,3
+print "tmp =: ";
+print tmp;
 
-4,5+6,7
+print 1,2,3;
 
-"Hello World!"
+print 4,5+6,7;
+
+print "Hello World!";

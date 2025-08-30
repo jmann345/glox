@@ -56,6 +56,20 @@ func (p PrintStmt) String() string {
 	return "print " + p.expr.String() + ";"
 }
 
+type ReturnStmt struct {
+	keyword Token
+	value   Expr
+}
+
+func (ReturnStmt) isStmt() {}
+func (r ReturnStmt) String() string {
+	if _, ok := r.value.(fmt.Stringer); ok {
+		return "return " + r.value.String()
+	}
+
+	return "return"
+}
+
 type IfStmt struct {
 	token      Token
 	condition  Expr
