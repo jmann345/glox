@@ -14,7 +14,7 @@ func (e RuntimeError) Error() string {
 
 type Interpreter struct {
 	globals *Environment
-	env 	*Environment
+	env     *Environment
 }
 
 func NewInterpreter() *Interpreter {

@@ -54,15 +54,15 @@ func (b Binary) String() string {
 
 type CallExpr struct {
 	callee    Expr
-	paren  	  Token
+	paren     Token
 	arguments []Expr
 }
 
 func (*CallExpr) isExpr() {}
 func (c CallExpr) String() string {
 	return parenthesize(
-		c.paren.lexeme, 
-		append([]Expr{c.callee}, c.arguments...)...
+		c.paren.lexeme,
+		append([]Expr{c.callee}, c.arguments...)...,
 	)
 }
 

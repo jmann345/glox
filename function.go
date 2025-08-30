@@ -12,9 +12,11 @@ func (f Function) Call(interpreter *Interpreter, arguments []any) any {
 	}
 
 	body, ok := f.decl.body.(*Block) // TODO: check if this should be *Block or Block
-	if !ok { panic("Unreachable.") }
+	if !ok {
+		panic("Unreachable.")
+	}
 
-	// TODO: Make this less ugly. 
+	// TODO: Make this less ugly.
 	// I don't want to have to force every Call implementation
 	// to also return an error.
 	err := interpreter.execBlock(*body, localEnv)

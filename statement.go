@@ -32,6 +32,7 @@ type FunDecl struct {
 	params []Token
 	body   Stmt // NOTE: book uses []Stmt, but `body` is always a Block stmt
 }
+
 func (*FunDecl) isStmt() {}
 func (f FunDecl) String() string {
 	return f.name.lexeme

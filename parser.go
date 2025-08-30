@@ -61,7 +61,7 @@ func (p *Parser) synchronize() {
 func (p *Parser) parseDeclaration() (Stmt, error) {
 	var stmt Stmt
 	var err error
-	switch p.peekToken().typ  {
+	switch p.peekToken().typ {
 	case VAR:
 		stmt, err = p.parseVarDecl()
 	case FUN:
@@ -145,7 +145,7 @@ func (p *Parser) parseFunDecl() (Stmt, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &FunDecl{name, params, body}, nil
 }
 
