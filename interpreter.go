@@ -7,17 +7,21 @@ type RuntimeError struct {
 	msg string
 }
 
-func (e *RuntimeError) Error() string {
+func (e RuntimeError) Error() string {
 	return fmt.Sprintf("[line %d] RuntimeError at '%s': %s",
 		e.tok.line, e.tok.lexeme, e.msg)
 }
 
 type Interpreter struct {
-	env *Environment
+	globals *Environment
+	env 	*Environment
 }
 
 func NewInterpreter() *Interpreter {
-	return &Interpreter{NewEnvironment(nil)}
+	globals := NewEnvironment(nil)
+	globals.Set("clock", Clock{})
+
+	return &Interpreter{globals, globals}
 }
 
 func (i *Interpreter) Interpret(stmts ...Stmt) []error {
@@ -52,34 +56,40 @@ func (i *Interpreter) execute(stmt Stmt) error {
 		fmt.Println(Stringify(value))
 
 		return nil
+	case *FunDecl:
+		function := Function{*s}
+		i.env.Set(s.name.lexeme, function)
+
+		return nil
+	case *Block:
+		return i.execBlock(*s, NewEnvironment(i.env))
 	case *IfStmt:
 		return i.execIfStmt(*s)
 	case *WhileStmt:
 		return i.execWhileStmt(*s)
 	case *ForStmt:
 		return i.execForStmt(*s)
-	case *Block:
-		prevEnv := i.env
-
-		i.env = NewEnvironment(prevEnv)
-		defer func() { i.env = prevEnv }() // ensure restoration even on error
-
-		for _, stmt := range s.stmts {
-			err := i.execute(stmt)
-			if err != nil {
-				return err
-			}
-		}
-
-		i.env = prevEnv
-
-		return nil
-	case nil: // no-op
+	case *NoOpStmt: // no-op
 		return nil
 	default:
 		panic(fmt.Sprintf(
 			"Unimplemented Statement type: %T", s))
 	}
+}
+
+func (i *Interpreter) execBlock(block Block, env *Environment) error {
+	prevEnv := i.env
+
+	i.env = env
+	defer func() { i.env = prevEnv }() // ensure restoration even on error
+
+	for _, stmt := range block.stmts {
+		if err := i.execute(stmt); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (i *Interpreter) execIfStmt(stmt IfStmt) error {
@@ -90,7 +100,7 @@ func (i *Interpreter) execIfStmt(stmt IfStmt) error {
 
 	condValBool, ok := condVal.(bool)
 	if !ok {
-		return &RuntimeError{
+		return RuntimeError{
 			stmt.token,
 			"Condition of 'if' must be boolean.",
 		}
@@ -115,7 +125,7 @@ func (i *Interpreter) execWhileStmt(stmt WhileStmt) error {
 
 	condValBool, ok := condVal.(bool)
 	if !ok {
-		return &RuntimeError{
+		return RuntimeError{
 			stmt.token,
 			"Condition of 'while' must be boolean.",
 		}
@@ -133,7 +143,7 @@ func (i *Interpreter) execWhileStmt(stmt WhileStmt) error {
 
 		condValBool, ok = condVal.(bool)
 		if !ok { // With a better type system, we wouldn't have to check this every time!
-			return &RuntimeError{
+			return RuntimeError{
 				stmt.token,
 				"Condition of 'while' must be boolean.",
 			}
@@ -160,16 +170,18 @@ func (i *Interpreter) execForStmt(stmt ForStmt) error {
 			return err
 		}
 
-		condValBool, ok := condVal.(bool)
-		if !ok {
-			return &RuntimeError{
-				stmt.token,
-				"Condition of 'for' must be boolean.",
+		if _, ok := stmt.condition.(*NoOpExpr); !ok {
+			condValBool, ok := condVal.(bool)
+			if !ok {
+				return RuntimeError{
+					stmt.token,
+					"Condition of 'for' must be boolean.",
+				}
 			}
-		}
 
-		if !condValBool {
-			break
+			if !condValBool {
+				break
+			}
 		}
 
 		if err = i.execute(stmt.body); err != nil {
@@ -191,7 +203,7 @@ func (i *Interpreter) evaluate(expr Expr) (any, error) {
 	case *Variable:
 		val, ok := i.env.Get(e.name.lexeme)
 		if !ok {
-			return nil, &RuntimeError{
+			return nil, RuntimeError{
 				e.name, "Undefined Variable '" + e.name.lexeme + "'.",
 			}
 		}
@@ -199,7 +211,7 @@ func (i *Interpreter) evaluate(expr Expr) (any, error) {
 		return val, nil
 	case *Assign:
 		if _, ok := i.env.Get(e.name.lexeme); !ok {
-			return nil, &RuntimeError{
+			return nil, RuntimeError{
 				e.name, "Undefined Variable '" + e.name.lexeme + "'.",
 			}
 		}
@@ -218,10 +230,14 @@ func (i *Interpreter) evaluate(expr Expr) (any, error) {
 		return i.evalPostfix(e)
 	case *Binary:
 		return i.evalBinary(e)
+	case *CallExpr:
+		return i.evalCall(e)
 	case *IfExpr:
 		return i.evalIfExpr(e)
 	case *Grouping:
 		return i.evaluate(e.expression)
+	case *NoOpExpr:
+		return nil, nil
 	default:
 		panic(fmt.Sprintf(
 			"Unimplemented Expression type: %T", e))
@@ -239,7 +255,7 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 	case NOT:
 		rhs, ok := rhs.(bool)
 		if !ok {
-			return nil, &RuntimeError{
+			return nil, RuntimeError{
 				tok: expr.op,
 				msg: "'not' Operand must be boolean.",
 			}
@@ -249,7 +265,7 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 	case MINUS:
 		rhs, ok := rhs.(float64)
 		if !ok {
-			return nil, &RuntimeError{
+			return nil, RuntimeError{
 				tok: expr.op,
 				msg: "'-' Operand must be a number",
 			}
@@ -267,7 +283,7 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 		// TODO: This would be much nicer with a proper type system!
 		varExpr, ok := expr.rhs.(*Variable)
 		if !ok {
-			return nil, &RuntimeError{
+			return nil, RuntimeError{
 				tok: expr.op,
 				msg: "Expression is not assignable",
 			}
@@ -276,7 +292,7 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 		key := varExpr.name.lexeme
 		_, ok = i.env.Get(key)
 		if !ok {
-			return nil, &RuntimeError{
+			return nil, RuntimeError{
 				varExpr.name,
 				"Use of undeclared identifier '" + key + "'",
 			}
@@ -284,7 +300,7 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 
 		val, ok := rhs.(float64)
 		if !ok {
-			return nil, &RuntimeError{
+			return nil, RuntimeError{
 				tok: expr.op,
 				msg: "'--' Operand must be a number",
 			}
@@ -296,7 +312,7 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 	case PLUS_PLUS:
 		varExpr, ok := expr.rhs.(*Variable)
 		if !ok {
-			return nil, &RuntimeError{
+			return nil, RuntimeError{
 				tok: expr.op,
 				msg: "Expression is not assignable",
 			}
@@ -305,7 +321,7 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 		key := varExpr.name.lexeme
 		_, ok = i.env.Get(key)
 		if !ok {
-			return nil, &RuntimeError{
+			return nil, RuntimeError{
 				varExpr.name,
 				"Use of undeclared identifier '" + key + "'",
 			}
@@ -313,7 +329,7 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 
 		val, ok := rhs.(float64)
 		if !ok {
-			return nil, &RuntimeError{
+			return nil, RuntimeError{
 				tok: expr.op,
 				msg: "'++' Operand must be a number",
 			}
@@ -336,7 +352,7 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 
 	ident, ok := expr.lhs.(*Variable)
 	if !ok {
-		return nil, &RuntimeError{
+		return nil, RuntimeError{
 			tok: expr.op,
 			msg: "Expression is not assignable",
 		}
@@ -345,7 +361,7 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 	key := ident.name.lexeme
 	_, ok = i.env.Get(key)
 	if !ok {
-		return nil, &RuntimeError{
+		return nil, RuntimeError{
 			ident.name,
 			"Use of undeclared identifier '" + key + "'",
 		}
@@ -353,7 +369,7 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 
 	val, ok := lhs.(float64)
 	if !ok {
-		return nil, &RuntimeError{
+		return nil, RuntimeError{
 			tok: expr.op,
 			msg: "'" + expr.op.lexeme + "' Operand must be a number",
 		}
@@ -399,6 +415,62 @@ func (i *Interpreter) evalBinary(expr *Binary) (any, error) {
 	panic("Unreachable.")
 }
 
+func (i *Interpreter) evalCall(expr *CallExpr) (any, error) {
+	if v, ok := expr.callee.(*Variable); ok {
+		if _, exists := i.env.Get(v.name.lexeme); !exists {
+			return nil, RuntimeError{v.name,
+				"Call to undeclared function '" + v.name.lexeme + "'",
+			}
+		}
+	}
+
+	callee, err := i.evaluate(expr.callee)
+	if err != nil {
+		return nil, err
+	}
+
+	args := []any{}
+	for _, arg := range expr.arguments {
+		argument, err := i.evaluate(arg)
+		if err != nil {
+			return nil, err
+		}
+
+		args = append(args, argument)
+	}
+
+	function, ok := callee.(Callable)
+	if !ok {
+		errMsg := "Can only call functions and classes."
+		switch callee.(type) {
+		case nil:
+			errMsg = "Called object type 'nil' is not a function."
+		case bool:
+			errMsg = "Called object type 'bool' is not a function."
+		case float64:
+			errMsg = "Called object type 'float' is not a function."
+		case string:
+			errMsg = "Called object type 'string' is not a function."
+		default:
+			panic("Unreachable.")
+		}
+		return nil, RuntimeError{expr.paren, errMsg}
+	}
+
+	if arity := function.Arity(); len(args) != arity {
+		return nil, RuntimeError{expr.paren, fmt.Sprintf(
+			"Expected %d arguments but got %d.", arity, len(args),
+		)}
+	}
+
+	val := function.Call(i, args)
+	if err, ok := val.(error); ok {
+		return nil, err
+	}
+
+	return val, nil
+}
+
 func (i *Interpreter) evalEquality(expr *Binary) (any, error) {
 	lhs, err := i.evaluate(expr.lhs)
 	if err != nil {
@@ -422,7 +494,7 @@ func (i *Interpreter) evalEquality(expr *Binary) (any, error) {
 			}
 		}
 
-		return nil, &RuntimeError{
+		return nil, RuntimeError{
 			tok: expr.op,
 			msg: fmt.Sprintf(
 				"Incompatible types: %T and %T", lhs, rhs,
@@ -452,7 +524,7 @@ func (i *Interpreter) evalComparison(expr *Binary) (any, error) {
 	}
 
 	if !SameType(lhs, rhs) {
-		return nil, &RuntimeError{
+		return nil, RuntimeError{
 			tok: expr.op,
 			msg: fmt.Sprintf(
 				"Incompatible types: %T and %T", lhs, rhs,
@@ -462,18 +534,18 @@ func (i *Interpreter) evalComparison(expr *Binary) (any, error) {
 
 	switch lhs.(type) {
 	case nil:
-		return nil, &RuntimeError{
+		return nil, RuntimeError{
 			tok: expr.op,
 			msg: "Cannot use " + expr.op.lexeme + " with nil.",
 		}
 	case bool:
-		return nil, &RuntimeError{
+		return nil, RuntimeError{
 			tok: expr.op,
 			msg: "Cannot use " + expr.op.lexeme + " with boolean values.",
 		}
 	// TODO: Allow string comparison!
 	case string:
-		return nil, &RuntimeError{
+		return nil, RuntimeError{
 			tok: expr.op,
 			msg: "Cannot use " + expr.op.lexeme + " with string values.",
 		}
@@ -507,7 +579,7 @@ func (i *Interpreter) evalMath(expr *Binary) (any, error) {
 	}
 
 	if !SameType(lhs, rhs) {
-		return nil, &RuntimeError{
+		return nil, RuntimeError{
 			tok: expr.op,
 			msg: fmt.Sprintf(
 				"Incompatible types: %T and %T", lhs, rhs,
@@ -518,7 +590,7 @@ func (i *Interpreter) evalMath(expr *Binary) (any, error) {
 	// Currently, the only overloaded op is '+' for string concatenation
 	if lhs, ok := lhs.(string); ok {
 		if expr.op.typ != PLUS {
-			return nil, &RuntimeError{
+			return nil, RuntimeError{
 				expr.op,
 				fmt.Sprintf(
 					"'%s' Operands must be both be numbers or strings.",
@@ -534,7 +606,7 @@ func (i *Interpreter) evalMath(expr *Binary) (any, error) {
 	lhs_n, ok := lhs.(float64)
 	rhs_n, _ := rhs.(float64)
 	if !ok {
-		return nil, &RuntimeError{
+		return nil, RuntimeError{
 			expr.op,
 			fmt.Sprintf("Invalid math operand type: %T", lhs),
 		}
@@ -571,7 +643,7 @@ func (i *Interpreter) evalLogical(expr *Binary) (any, error) {
 	}
 
 	if !SameType(lhs, rhs) {
-		return nil, &RuntimeError{
+		return nil, RuntimeError{
 			tok: expr.op,
 			msg: fmt.Sprintf(
 				"Incompatible types: %T and %T", lhs, rhs,
@@ -582,9 +654,9 @@ func (i *Interpreter) evalLogical(expr *Binary) (any, error) {
 	lhs_b, ok := lhs.(bool)
 	rhs_b, _ := rhs.(bool)
 	if !ok {
-		return nil, &RuntimeError{
+		return nil, RuntimeError{
 			expr.op,
-			fmt.Sprintf("Invalid math operand type: %T", lhs),
+			fmt.Sprintf("Invalid logical operand type: %T", lhs),
 		}
 	}
 
@@ -606,7 +678,7 @@ func (i *Interpreter) evalIfExpr(expr *IfExpr) (any, error) {
 
 	condVal, ok := cond.(bool)
 	if !ok {
-		return nil, &RuntimeError{
+		return nil, RuntimeError{
 			expr.token,
 			"Condition of 'if' must be boolean.",
 		}

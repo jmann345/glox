@@ -50,6 +50,8 @@ const (
 	ELSE
 	WHILE
 	FOR
+	BREAK
+	CYCLE
 	FUN
 	RETURN
 	// OOP Keywords

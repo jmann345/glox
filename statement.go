@@ -7,7 +7,14 @@ import (
 
 type Stmt interface {
 	isStmt()
-	fmt.Stringer // Not sure if needed
+	fmt.Stringer // TODO: Standardize implementations or delete the stringer requirement
+}
+
+type NoOpStmt struct{}
+
+func (*NoOpStmt) isStmt() {}
+func (n NoOpStmt) String() string {
+	return "no-op"
 }
 
 type VarDecl struct {
@@ -18,6 +25,16 @@ type VarDecl struct {
 func (*VarDecl) isStmt() {}
 func (d VarDecl) String() string {
 	return "var " + d.name.lexeme + " = " + d.expr.String() + ";"
+}
+
+type FunDecl struct {
+	name   Token
+	params []Token
+	body   Stmt // NOTE: book uses []Stmt, but `body` is always a Block stmt
+}
+func (*FunDecl) isStmt() {}
+func (f FunDecl) String() string {
+	return f.name.lexeme
 }
 
 type ExprStmt struct {

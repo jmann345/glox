@@ -4,7 +4,9 @@ import "strconv"
 
 var keywords = map[string]TokenType{
 	"and":    AND,
+	"break":  BREAK,
 	"class":  CLASS,
+	"cycle":  CYCLE,
 	"else":   ELSE,
 	"false":  FALSE,
 	"for":    FOR,
@@ -43,8 +45,8 @@ func (t *Tokenizer) Init(source string) {
 
 func (t *Tokenizer) Tokenize() ([]Token, []error) {
 	errs := make([]error, 0)
-	srcLen := len(t.source)
-	for t.current < srcLen {
+
+	for t.current < len(t.source) {
 		t.start = t.current
 		err := t.scanToken()
 		if err != nil {
@@ -52,6 +54,7 @@ func (t *Tokenizer) Tokenize() ([]Token, []error) {
 		}
 	}
 	t.tokens = append(t.tokens, Token{EOF, "", nil, t.line})
+
 	return t.tokens, errs
 }
 
@@ -263,16 +266,18 @@ func (t *Tokenizer) scanIdentifierOrKeyword() {
 	for IsAlphaNumeric(t.peekChar()) {
 		t.current++
 	}
+
 	text := t.source[t.start:t.current]
 	typ, ok := keywords[text]
 	if !ok {
 		typ = IDENTIFIER
 	}
+
 	t.addToken(typ, nil)
 }
 
 func (t *Tokenizer) scanComment() error {
-	// Don't add any tokens for comments!
+	// We don't add any tokens for comments!
 	srcLen := len(t.source)
 	// Block comment #[ ... ]#
 	if t.current < srcLen && t.peekAndConsume("[") {

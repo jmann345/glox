@@ -24,6 +24,13 @@ func parenthesize(name string, exprs ...Expr) string {
 	return sb.String()
 }
 
+type NoOpExpr struct{}
+
+func (*NoOpExpr) isExpr() {}
+func (n NoOpExpr) String() string {
+	return "no-op"
+}
+
 type Assign struct {
 	name  Token
 	value Expr
@@ -43,6 +50,20 @@ type Binary struct {
 func (*Binary) isExpr() {}
 func (b Binary) String() string {
 	return parenthesize(b.op.lexeme, b.lhs, b.rhs)
+}
+
+type CallExpr struct {
+	callee    Expr
+	paren  	  Token
+	arguments []Expr
+}
+
+func (*CallExpr) isExpr() {}
+func (c CallExpr) String() string {
+	return parenthesize(
+		c.paren.lexeme, 
+		append([]Expr{c.callee}, c.arguments...)...
+	)
 }
 
 type IfExpr struct {

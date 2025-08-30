@@ -17,11 +17,13 @@ func IsAlphaNumeric(c byte) bool {
 }
 
 func Stringify(value any) string {
-	switch value.(type) {
+	switch v := value.(type) {
 	case nil:
 		return "nil"
 	case bool, float64, string:
-		return fmt.Sprintf("%v", value)
+		return fmt.Sprintf("%v", v)
+	case fmt.Stringer:
+		return v.String()
 	default:
 		panic("Unreachable.")
 	}
