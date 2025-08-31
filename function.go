@@ -13,7 +13,7 @@ func (f Function) Call(interpreter *Interpreter, arguments []any) any {
 
 	localEnv.Set(f.decl.name.lexeme, f) // Define function in its own scope so recursion works properly
 
-	body, ok := f.decl.body.(Block) // TODO: check if this should be *Block or Block
+	body, ok := f.decl.body.(Block)
 	if !ok {
 		panic("Unreachable.")
 	}

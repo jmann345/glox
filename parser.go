@@ -188,6 +188,10 @@ func (p *Parser) parseStatement() (Stmt, error) {
 		return p.parseWhileStmt()
 	case FOR:
 		return p.parseForStmt()
+	case BREAK:
+		return p.parseBreakStmt()
+	case CYCLE:
+		return p.parseCycleStmt()
 	case RETURN:
 		return p.parseReturnStmt()
 	case LEFT_BRACE:
@@ -369,6 +373,36 @@ func (p *Parser) parseForStmt() (Stmt, error) {
 	}
 
 	return ForStmt{tok, initializer, condition, increment, body}, nil
+}
+
+// break ::= "break;"
+func (p *Parser) parseBreakStmt() (Stmt, error) {
+	keyword := p.peekToken()
+	if err := p.consumeToken(BREAK, "Expect break."); err != nil {
+		return nil, err
+	}
+
+	err := p.consumeToken(SEMICOLON, "Expect ';' after 'break'.")
+	if err != nil {
+		return nil, err
+	}
+
+	return BreakStmt{keyword}, nil
+}
+
+// cycle ::= "cycle;"
+func (p *Parser) parseCycleStmt() (Stmt, error) {
+	keyword := p.peekToken()
+	if err := p.consumeToken(CYCLE, "Expect cycle."); err != nil {
+		return nil, err
+	}
+
+	err := p.consumeToken(SEMICOLON, "Expect ';' after 'cycle'.")
+	if err != nil {
+		return nil, err
+	}
+
+	return CycleStmt{keyword}, nil
 }
 
 // return ::= "return" expression? ";"

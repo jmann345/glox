@@ -56,6 +56,24 @@ func (p PrintStmt) String() string {
 	return "print " + p.expr.String() + ";"
 }
 
+type BreakStmt struct {
+	keyword Token
+}
+
+func (BreakStmt) isStmt() {}
+func (BreakStmt) String() string {
+	return "break"
+}
+
+type CycleStmt struct {
+	keyword Token
+}
+
+func (CycleStmt) isStmt() {}
+func (CycleStmt) String() string {
+	return "cycle"
+}
+
 type ReturnStmt struct {
 	keyword Token
 	value   Expr

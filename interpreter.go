@@ -69,6 +69,10 @@ func (i *Interpreter) execute(stmt Stmt) (any, error) {
 		return nil, i.execWhileStmt(s)
 	case ForStmt:
 		return nil, i.execForStmt(s)
+	case BreakStmt:
+		return nil, Break{}
+	case CycleStmt:
+		return nil, Cycle{}
 	case ReturnStmt:
 		return nil, i.execReturnStmt(s)
 	case NoOpStmt: // no-op
@@ -135,9 +139,17 @@ func (i *Interpreter) execWhileStmt(stmt WhileStmt) error {
 		}
 	}
 
+whileLoop:
 	for condValBool {
 		if _, err = i.execute(stmt.body); err != nil {
-			return err
+			switch err.(type) {
+			case Break:
+				break whileLoop
+			case Cycle:
+				continue whileLoop
+			default:
+				return err
+			}
 		}
 
 		condVal, err = i.evaluate(stmt.condition)
@@ -168,6 +180,7 @@ func (i *Interpreter) execForStmt(stmt ForStmt) error {
 		return err
 	}
 
+forLoop:
 	for {
 		condVal, err := i.evaluate(stmt.condition)
 		if err != nil {
@@ -189,7 +202,14 @@ func (i *Interpreter) execForStmt(stmt ForStmt) error {
 		}
 
 		if _, err = i.execute(stmt.body); err != nil {
-			return err
+			switch err.(type) {
+			case Break:
+				break forLoop
+			case Cycle:
+				continue forLoop
+			default:
+				return err
+			}
 		}
 
 		if _, err = i.evaluate(stmt.increment); err != nil {

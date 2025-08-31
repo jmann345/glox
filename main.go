@@ -24,9 +24,6 @@ func (e LoxError) Error() string {
 }
 
 func main() {
-	// TODO: path should be var determined by user input
-
-	// we say glox instead of jlox bc its golox not javalox!
 	numArgs := len(os.Args)
 
 	if numArgs > 2 {
@@ -40,7 +37,6 @@ func main() {
 	} else {
 		err := runPrompt()
 		if err != nil {
-			// This might be a great place to handle syntax errors later!
 			log.Fatal(err)
 		}
 	}
@@ -57,11 +53,8 @@ func runFile(path string) error {
 		return err
 	}
 
-	/* err := */
 	interpreter := NewInterpreter()
-	run(string(buff), interpreter) // may need to specify utf-8/acsii
-	// NOTE: errs should be printed inside run()!
-	// if err != nil { os.Exit(64) }
+	run(string(buff), interpreter)
 
 	return nil
 }
@@ -80,8 +73,8 @@ func runPrompt() error {
 		if strings.TrimSpace(line) == "" {
 			break
 		}
-		/* _ = */ run(line, interpreter) // error printed inside run
-		// We ignore errors in runPrompt() bc it will just be printed, user can retry
+
+		run(line, interpreter)
 	}
 
 	return nil
