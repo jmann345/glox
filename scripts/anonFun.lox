@@ -1,0 +1,5 @@
+# Handle tricky case!
+fun () {};  # inside exprStmt
+
+# run it immediately
+fun(a) {print a;}("6"+"9");

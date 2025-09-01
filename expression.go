@@ -13,6 +13,7 @@ type Expr interface {
 
 func parenthesize(name string, exprs ...Expr) string {
 	var sb strings.Builder
+
 	sb.WriteByte('(')
 	sb.WriteString(name)
 	for _, expr := range exprs {
@@ -142,4 +143,28 @@ type Variable struct {
 func (Variable) isExpr() {}
 func (v Variable) String() string {
 	return parenthesize(v.name.lexeme)
+}
+
+type FunExpr struct {
+	token  Token
+	params []Token
+	body   Stmt // NOTE: always a block statement
+}
+
+func (FunExpr) isExpr() {}
+func (f FunExpr) String() string {
+	var sb strings.Builder
+
+	sb.WriteString("fun")
+
+	sb.WriteByte('(')
+	for i := range f.params {
+		sb.WriteString(f.params[i].lexeme)
+		if i < len(f.params)-1 {
+			sb.WriteByte(',')
+		}
+	}
+	sb.WriteByte(')')
+
+	return sb.String()
 }

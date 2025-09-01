@@ -1,50 +1,130 @@
-#[ Arithmetic and precedence
-   Only the first expr will parse correctly for now
+# all_tests.lox
+# each section prints something or triggers an error
+# expected result or error is shown in comments
+
+# basics
+print 1 + 2 * 3;       # expect: 7
+print (1 + 2) * 3;     # expect: 9
+print "hello" + " world"; # expect: hello world
+print 10 - 3 - 2;      # expect: 5
+print not false;       # expect: true
+print true and false;  # expect: false
+print true or false;   # expect: true
+
+# variables
+var a = 1;
+a = a + 2;
+print a;               # expect: 3
+var b;
+print b;               # expect: nil
+
+# if statement
+if true { print 1; } else { print 2; }  # expect: 1
+if false { print 3; }                   # expect: (nothing)
+
+# if expression
+print if true { 1 } else { 2 };         # expect: 1
+print if false { "x" } else { "y" } + "z"; # expect: yz
+
+# while loop with break/cycle
+var i = 0;
+while i < 7 {
+  i++;
+  if i == 3 { cycle; }
+  if i == 4 { break; }
+}
+print i;                                # expect: 4
+
+# for loops
+var sum = 0;
+for var j = 0; j < 5; j++ { sum = sum + j; }
+print sum;                              # expect: 10
+
+var k = 0;
+for ; k < 3; { k++; }
+print k;                                # expect: 3
+
+var n = 0;
+for ; ; { n++; if n == 2 { break; } }
+print n;                                # expect: 2
+
+# functions
+fun add(a, b) { return a + b; }
+print add(2, 3);                        # expect: 5
+
+fun giveFive() { return 5; }
+print giveFive();                       # expect: 5
+
+fun fact(n) {
+  if n == 0 { return 1; }
+  else { return n * fact(n - 1); }
+}
+print fact(5);                          # expect: 120
+
+# closures
+fun makeCounter() {
+  var i = 0;
+  fun inc() { i++; return i; }
+  return inc;
+}
+var c = makeCounter();
+print c();                              # expect: 1
+print c();                              # expect: 2
+var d = makeCounter();
+print d();                              # expect: 1
+
+# anonymous functions
+var mul = fun(a, b) { return a * b; };
+print mul(4, 5);                        # expect: 20
+var inc2 = fun() {
+  var x = 0;
+  return fun() { x++; return x; };
+}();
+print inc2();                           # expect: 1
+print inc2();                           # expect: 2
+
+# comments
+# single line
+print 1;                                # expect: 1
+#[
+block
+comment
 ]#
-1 + 2 * 3
+print 2;                                # expect: 2
 
-(1 + 2) * 3
-10 - 2 - 3
+# inc/dec
+var ii = 0;
+print ++ii;                             # expect: 1
+print ii;                               # expect: 1
+var jj = 0;
+print jj++;                             # expect: 0
+print jj;                               # expect: 1
 
-# Unary
-not not false
---5
+# block scopes
+var x = 1;
+{
+  var x = 2;
+  print x;                              # expect: 2
+}
+print x;                                # expect: 1
 
-# Logical
-true and false or true
-false or true and false
+# ---------------- ERRORS ----------------
+# Uncomment each one individually to test errors
 
-# Comparison and equality
-1 < 2 == true
-2 <= 2 != false
-3 > 1
-4 >= 4
-
-# Comma operator
-1,2,3
-1, 2+3
-1+2,3+4,5
-
-# If-expressions
-if 1 < 2 { "yes" } else { "no" }
-if true { 0 } else if false { 1 } else { 2 }
-if true { 1,2,3 } else { 4 }
-
-# Strings
-"hello"
-"Hello World!"
-
-# Comments
-# single line comment
-#[ multi
-   line
-   comment ]#
-"after comment"
-
-# Error cases to check diagnostics
-"unterminated
-* 2
-== 3
-<= 4
-!   # bare ! should error
-#[ unterminated block comment
+# print x;   # expect runtime error: Undefined Variable 'x'
+# print "1" + 2; # expect runtime error: '+ Operands must be both numbers or strings'
+# print not 1;   # expect runtime error: 'not' operand must be boolean
+# print "a" < "b"; # expect runtime error: cannot use < with strings
+# (1)++;         # expect runtime error: Expression is not assignable
+# var y = 1; y(); # expect runtime error: float is not callable
+# fun f(a, b) { return a; } f(1); # expect runtime error: Expected 2 args but got 1
+# return 1;     # expect runtime error: return at top level
+# if 1 { print "no"; } # expect runtime error: condition must be boolean
+# while "x" { print 1; } # expect runtime error: condition must be boolean
+# for ; "x" ; { break; } # expect runtime error: condition must be boolean
+# print "abc   # expect tokenizer error: Unterminated string
+# !            # expect tokenizer error: Unexpected character
+# 1 = 2;       # expect parser error: Invalid assignment target
+# var z = 1    # expect parser error: missing ';'
+# print ;      # expect parser error: Expect expression
+# , 1;         # expect parser error: Missing left-hand operand for ','

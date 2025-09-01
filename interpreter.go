@@ -57,7 +57,7 @@ func (i *Interpreter) execute(stmt Stmt) (any, error) {
 
 		return nil, nil
 	case FunDecl:
-		function := Function{s}
+		function := &Function{decl: s, closure: i.env}
 		i.env.Set(s.name.lexeme, function)
 
 		return nil, nil
@@ -275,6 +275,8 @@ func (i *Interpreter) evaluate(expr Expr) (any, error) {
 		return i.evalIfExpr(e)
 	case Grouping:
 		return i.evaluate(e.expression)
+	case FunExpr:
+		return &AnonFunction{expr: e, closure: i.env}, nil
 	case NoOpExpr:
 		return nil, nil
 	default:
@@ -296,7 +298,7 @@ func (i *Interpreter) evalUnary(expr Unary) (any, error) {
 		if !ok {
 			return nil, RuntimeError{
 				tok: expr.op,
-				msg: "'not' Operand must be boolean.",
+				msg: "'not' operand must be boolean.",
 			}
 		}
 
@@ -306,7 +308,7 @@ func (i *Interpreter) evalUnary(expr Unary) (any, error) {
 		if !ok {
 			return nil, RuntimeError{
 				tok: expr.op,
-				msg: "'-' Operand must be a number",
+				msg: "'-' operand must be a number",
 			}
 		}
 
@@ -341,7 +343,7 @@ func (i *Interpreter) evalUnary(expr Unary) (any, error) {
 		if !ok {
 			return nil, RuntimeError{
 				tok: expr.op,
-				msg: "'--' Operand must be a number",
+				msg: "'--' operand must be a number",
 			}
 		}
 
@@ -370,7 +372,7 @@ func (i *Interpreter) evalUnary(expr Unary) (any, error) {
 		if !ok {
 			return nil, RuntimeError{
 				tok: expr.op,
-				msg: "'++' Operand must be a number",
+				msg: "'++' operand must be a number",
 			}
 		}
 
@@ -410,7 +412,7 @@ func (i *Interpreter) evalPostfix(expr Postfix) (any, error) {
 	if !ok {
 		return nil, RuntimeError{
 			tok: expr.op,
-			msg: "'" + expr.op.lexeme + "' Operand must be a number",
+			msg: "'" + expr.op.lexeme + "' operand must be a number",
 		}
 	}
 
@@ -632,7 +634,7 @@ func (i *Interpreter) evalMath(expr Binary) (any, error) {
 			return nil, RuntimeError{
 				expr.op,
 				fmt.Sprintf(
-					"'%s' Operands must be both be numbers or strings.",
+					"'%s' operands must be both be numbers or strings.",
 					expr.op.lexeme,
 				),
 			}
