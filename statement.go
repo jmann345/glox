@@ -18,13 +18,13 @@ func (n NoOpStmt) String() string {
 }
 
 type VarDecl struct {
-	name Token
-	expr Expr
+	name        Token
+	initializer Expr
 }
 
 func (VarDecl) isStmt() {}
 func (d VarDecl) String() string {
-	return "var " + d.name.lexeme + " = " + d.expr.String() + ";"
+	return "var " + d.name.lexeme + " = " + d.initializer.String() + ";"
 }
 
 type FunDecl struct {

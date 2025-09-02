@@ -22,18 +22,29 @@ func (e *Environment) Get(key string) (any, bool) {
 	return nil, false
 }
 
+func (e *Environment) GetAt(distance int, key string) any {
+	for i := 0; i < distance; i++ {
+		e = e.enclosing
+	}
+
+	return e.values[key]
+}
+
 func (e *Environment) Set(key string, value any) {
+	e.values[key] = value
+}
+
+func (e *Environment) SetAt(distance int, key string, value any) {
+	for i := 0; i < distance; i++ {
+		e = e.enclosing
+	}
+
 	e.values[key] = value
 }
 
 func (e *Environment) SetInScope(key string, value any) {
 	for _, ok := e.values[key]; !ok; _, ok = e.values[key] {
 		e = e.enclosing
-		if e == nil {
-			panic("Unreachable.")
-		}
-
-		_, ok = e.values[key]
 	}
 
 	e.values[key] = value

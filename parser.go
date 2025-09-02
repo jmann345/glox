@@ -135,7 +135,7 @@ func (p *Parser) parseVarDecl() (Stmt, error) {
 		print x;
 		>>> "undefined"
 	*/
-	var initializer Expr = Literal{nil}
+	var initializer Expr = &Literal{nil}
 	if p.peekToken().typ == EQUAL {
 		p.current++ // consume '='
 
@@ -150,7 +150,7 @@ func (p *Parser) parseVarDecl() (Stmt, error) {
 		return nil, err
 	}
 
-	return VarDecl{name, initializer}, nil
+	return &VarDecl{name, initializer}, nil
 }
 
 // funDecl ::= "fun" IDENTIFIER "(" parameters? ")" block
@@ -184,7 +184,7 @@ func (p *Parser) parseFunDecl() (Stmt, error) {
 		return nil, err
 	}
 
-	return FunDecl{name, params, body}, nil
+	return &FunDecl{name, params, body}, nil
 }
 
 func (p *Parser) parseParameters() ([]Token, error) {
@@ -251,7 +251,7 @@ func (p *Parser) parseExprStmt() (Stmt, error) {
 		return nil, err
 	}
 
-	return ExprStmt{expr}, nil
+	return &ExprStmt{expr}, nil
 }
 
 // block ::= "{" declaration* "}"
@@ -277,7 +277,7 @@ func (p *Parser) parseBlock() (Stmt, error) {
 		return nil, err
 	}
 
-	return Block{stmts}, nil
+	return &Block{stmts}, nil
 }
 
 // print ::= "print" value ";"
@@ -295,7 +295,7 @@ func (p *Parser) parsePrintStmt() (Stmt, error) {
 		return nil, err
 	}
 
-	return PrintStmt{value}, nil
+	return &PrintStmt{value}, nil
 }
 
 // if ::= "if" expression block ( "else" ( block | ifStmt ) )?
@@ -332,7 +332,7 @@ func (p *Parser) parseIfStmt() (Stmt, error) {
 		}
 	}
 
-	return IfStmt{tok, cond, thenStmt, elseStmt}, nil
+	return &IfStmt{tok, cond, thenStmt, elseStmt}, nil
 }
 
 // while ::= "while" expression block
@@ -354,7 +354,7 @@ func (p *Parser) parseWhileStmt() (Stmt, error) {
 		return nil, err
 	}
 
-	return WhileStmt{tok, cond, block}, nil
+	return &WhileStmt{tok, cond, block}, nil
 }
 
 // for ::= "for" ( varDecl | exprStmt | ";" )
@@ -374,7 +374,7 @@ func (p *Parser) parseForStmt() (Stmt, error) {
 	switch tok := p.peekToken(); tok.typ {
 	case SEMICOLON:
 		p.current++ // consume ';'
-		initializer = NoOpStmt{}
+		initializer = &NoOpStmt{}
 	case VAR:
 		initializer, err = p.parseVarDecl()
 	default:
@@ -384,7 +384,7 @@ func (p *Parser) parseForStmt() (Stmt, error) {
 		return nil, err
 	}
 
-	var condition Expr = NoOpExpr{}
+	var condition Expr = &NoOpExpr{}
 	if p.peekToken().typ != SEMICOLON {
 		condition, err = p.parseExpression()
 		if err != nil {
@@ -397,7 +397,7 @@ func (p *Parser) parseForStmt() (Stmt, error) {
 		return nil, err
 	}
 
-	var increment Expr = NoOpExpr{}
+	var increment Expr = &NoOpExpr{}
 	if p.peekToken().typ != LEFT_BRACE {
 		increment, err = p.parseExpression()
 		if err != nil {
@@ -410,7 +410,7 @@ func (p *Parser) parseForStmt() (Stmt, error) {
 		return nil, err
 	}
 
-	return ForStmt{tok, initializer, condition, increment, body}, nil
+	return &ForStmt{tok, initializer, condition, increment, body}, nil
 }
 
 // break ::= "break;"
@@ -425,7 +425,7 @@ func (p *Parser) parseBreakStmt() (Stmt, error) {
 		return nil, err
 	}
 
-	return BreakStmt{keyword}, nil
+	return &BreakStmt{keyword}, nil
 }
 
 // cycle ::= "cycle;"
@@ -440,7 +440,7 @@ func (p *Parser) parseCycleStmt() (Stmt, error) {
 		return nil, err
 	}
 
-	return CycleStmt{keyword}, nil
+	return &CycleStmt{keyword}, nil
 }
 
 // return ::= "return" expression? ";"
@@ -465,7 +465,7 @@ func (p *Parser) parseReturnStmt() (Stmt, error) {
 		return nil, err
 	}
 
-	return ReturnStmt{keyword, value}, nil
+	return &ReturnStmt{keyword, value}, nil
 }
 
 // expression ::= assignment
@@ -488,8 +488,8 @@ func (p *Parser) parseAssignment() (Expr, error) {
 			return nil, err
 		}
 
-		if expr, ok := expr.(Variable); ok {
-			return Assign{expr.name, value}, nil
+		if expr, ok := expr.(*Variable); ok {
+			return &Assign{expr.name, value}, nil
 		}
 
 		return nil, ParseError{tok, "Invalid assignment target."}
@@ -522,7 +522,7 @@ func (p *Parser) parseComma() (Expr, error) {
 			return nil, err
 		}
 
-		expr = Binary{expr, op, rhs}
+		expr = &Binary{expr, op, rhs}
 	}
 
 	return expr, nil
@@ -551,7 +551,7 @@ func (p *Parser) parseLogicalOr() (Expr, error) {
 			return nil, err
 		}
 
-		expr = Binary{expr, op, rhs}
+		expr = &Binary{expr, op, rhs}
 	}
 
 	return expr, nil
@@ -580,7 +580,7 @@ func (p *Parser) parseLogicalAnd() (Expr, error) {
 			return nil, err
 		}
 
-		expr = Binary{expr, op, rhs}
+		expr = &Binary{expr, op, rhs}
 	}
 
 	return expr, nil
@@ -613,7 +613,7 @@ func (p *Parser) parseEquality() (Expr, error) {
 			return nil, err
 		}
 
-		expr = Binary{expr, op, rhs}
+		expr = &Binary{expr, op, rhs}
 	}
 
 	return expr, nil
@@ -650,7 +650,7 @@ func (p *Parser) parseComparison() (Expr, error) {
 			return nil, err
 		}
 
-		expr = Binary{expr, op, rhs}
+		expr = &Binary{expr, op, rhs}
 	}
 
 	return expr, nil
@@ -680,7 +680,7 @@ func (p *Parser) parseTerm() (Expr, error) {
 			return nil, err
 		}
 
-		expr = Binary{expr, op, rhs}
+		expr = &Binary{expr, op, rhs}
 	}
 
 	return expr, nil
@@ -710,7 +710,7 @@ func (p *Parser) parseFactor() (Expr, error) {
 			return nil, err
 		}
 
-		expr = Binary{expr, op, rhs}
+		expr = &Binary{expr, op, rhs}
 	}
 
 	return expr, nil
@@ -724,7 +724,7 @@ func (p *Parser) parseUnary() (Expr, error) {
 			return nil, err
 		}
 
-		return Unary{op, rhs}, nil
+		return &Unary{op, rhs}, nil
 	}
 
 	return p.parsePostfix()
@@ -738,7 +738,7 @@ func (p *Parser) parsePostfix() (Expr, error) {
 	}
 
 	if op, ok := p.consumeOneOf(MINUS_MINUS, PLUS_PLUS); ok {
-		return Postfix{expr, op}, nil
+		return &Postfix{expr, op}, nil
 	}
 
 	return expr, nil
@@ -762,7 +762,7 @@ func (p *Parser) parseCall() (Expr, error) {
 			return nil, err
 		}
 
-		return CallExpr{expr, paren, args}, nil
+		return &CallExpr{expr, paren, args}, nil
 	}
 
 	return expr, nil
@@ -815,15 +815,15 @@ func (p *Parser) parseArguments() ([]Expr, error) {
 func (p *Parser) parsePrimary() (Expr, error) {
 	switch tok := p.peekAndConsume(); tok.typ {
 	case NUMBER:
-		return Literal{tok.literal}, nil
+		return &Literal{tok.literal}, nil
 	case STRING:
-		return Literal{tok.literal}, nil
+		return &Literal{tok.literal}, nil
 	case TRUE:
-		return Literal{true}, nil
+		return &Literal{true}, nil
 	case FALSE:
-		return Literal{false}, nil
+		return &Literal{false}, nil
 	case NIL:
-		return Literal{nil}, nil
+		return &Literal{nil}, nil
 	case LEFT_PAREN:
 		expr, err := p.parseExpression()
 		if err != nil {
@@ -835,9 +835,9 @@ func (p *Parser) parsePrimary() (Expr, error) {
 			return nil, err
 		}
 
-		return Grouping{expr}, nil
+		return &Grouping{expr}, nil
 	case IDENTIFIER:
-		return Variable{tok}, nil
+		return &Variable{tok}, nil
 	case IF:
 		return p.parseIfExpr()
 	case FUN:
@@ -871,7 +871,7 @@ func (p *Parser) parseAnonFunction() (Expr, error) {
 		return nil, err
 	}
 
-	return FunExpr{tok, params, body}, nil
+	return &FunExpr{tok, params, body}, nil
 }
 
 // CHALLENGE 2: Add ternary operator
@@ -928,5 +928,5 @@ func (p *Parser) parseIfExpr() (Expr, error) {
 		}
 	}
 
-	return IfExpr{tok, cond, thenExpr, elseExpr}, nil
+	return &IfExpr{tok, cond, thenExpr, elseExpr}, nil
 }

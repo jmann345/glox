@@ -15,28 +15,29 @@ func (e RuntimeError) Error() string {
 type Interpreter struct {
 	globals *Environment
 	env     *Environment
+	locals  map[Expr]int
 }
 
 func NewInterpreter() *Interpreter {
 	globals := NewEnvironment(nil)
 	globals.Set("clock", Clock{})
 
-	return &Interpreter{globals, globals}
+	return &Interpreter{globals, globals, make(map[Expr]int)}
 }
 
-func (i *Interpreter) Interpret(stmts ...Stmt) []error {
-	errs := []error{}
-	for _, stmt := range stmts {
-		_, err := i.execute(stmt) // discard return value for now
-		errs = append(errs, err)
-	}
-	return errs
+func (i *Interpreter) Resolve(expr Expr, depth int) {
+	i.locals[expr] = depth
+}
+
+func (i *Interpreter) Interpret(stmt Stmt) error {
+	_, err := i.execute(stmt)
+	return err
 }
 
 func (i *Interpreter) execute(stmt Stmt) (any, error) {
 	switch s := stmt.(type) {
-	case VarDecl:
-		val, err := i.evaluate(s.expr)
+	case *VarDecl:
+		val, err := i.evaluate(s.initializer)
 		if err != nil {
 			return nil, err
 		}
@@ -44,10 +45,10 @@ func (i *Interpreter) execute(stmt Stmt) (any, error) {
 		i.env.Set(s.name.lexeme, val)
 
 		return nil, nil
-	case ExprStmt:
+	case *ExprStmt:
 		_, err := i.evaluate(s.expr)
 		return nil, err
-	case PrintStmt:
+	case *PrintStmt:
 		value, err := i.evaluate(s.expr)
 		if err != nil {
 			return nil, err
@@ -56,34 +57,33 @@ func (i *Interpreter) execute(stmt Stmt) (any, error) {
 		fmt.Println(Stringify(value))
 
 		return nil, nil
-	case FunDecl:
+	case *FunDecl:
 		function := &Function{decl: s, closure: i.env}
 		i.env.Set(s.name.lexeme, function)
 
 		return nil, nil
-	case Block:
+	case *Block:
 		return nil, i.execBlock(s, NewEnvironment(i.env))
-	case IfStmt:
+	case *IfStmt:
 		return nil, i.execIfStmt(s)
-	case WhileStmt:
+	case *WhileStmt:
 		return nil, i.execWhileStmt(s)
-	case ForStmt:
+	case *ForStmt:
 		return nil, i.execForStmt(s)
-	case BreakStmt:
+	case *BreakStmt:
 		return nil, Break{}
-	case CycleStmt:
+	case *CycleStmt:
 		return nil, Cycle{}
-	case ReturnStmt:
+	case *ReturnStmt:
 		return nil, i.execReturnStmt(s)
-	case NoOpStmt: // no-op
+	case *NoOpStmt: // no-op
 		return nil, nil
 	default:
-		panic(fmt.Sprintf(
-			"Unimplemented Statement type: %T", s))
+		panic(fmt.Sprintf("Unimplemented Statement type: %T", s))
 	}
 }
 
-func (i *Interpreter) execBlock(block Block, env *Environment) error {
+func (i *Interpreter) execBlock(block *Block, env *Environment) error {
 	prevEnv := i.env
 
 	i.env = env
@@ -98,7 +98,7 @@ func (i *Interpreter) execBlock(block Block, env *Environment) error {
 	return nil
 }
 
-func (i *Interpreter) execIfStmt(stmt IfStmt) error {
+func (i *Interpreter) execIfStmt(stmt *IfStmt) error {
 	condVal, err := i.evaluate(stmt.condition)
 	if err != nil {
 		return err
@@ -125,7 +125,7 @@ func (i *Interpreter) execIfStmt(stmt IfStmt) error {
 	return nil
 }
 
-func (i *Interpreter) execWhileStmt(stmt WhileStmt) error {
+func (i *Interpreter) execWhileStmt(stmt *WhileStmt) error {
 	condVal, err := i.evaluate(stmt.condition)
 	if err != nil {
 		return err
@@ -169,7 +169,7 @@ whileLoop:
 	return nil
 }
 
-func (i *Interpreter) execForStmt(stmt ForStmt) error {
+func (i *Interpreter) execForStmt(stmt *ForStmt) error {
 	prevEnv := i.env
 
 	// make new env so the initializer doesn't exist out of scope
@@ -187,7 +187,7 @@ forLoop:
 			return err
 		}
 
-		if _, ok := stmt.condition.(NoOpExpr); !ok {
+		if _, ok := stmt.condition.(*NoOpExpr); !ok {
 			condValBool, ok := condVal.(bool)
 			if !ok {
 				return RuntimeError{
@@ -220,7 +220,7 @@ forLoop:
 	return nil
 }
 
-func (i *Interpreter) execReturnStmt(stmt ReturnStmt) error {
+func (i *Interpreter) execReturnStmt(stmt *ReturnStmt) error {
 	var value any = nil
 	var err error = nil
 
@@ -237,55 +237,58 @@ func (i *Interpreter) execReturnStmt(stmt ReturnStmt) error {
 
 func (i *Interpreter) evaluate(expr Expr) (any, error) {
 	switch e := expr.(type) {
-	case Literal:
+	case *Literal:
 		return e.value, nil
-	case Variable:
-		val, ok := i.env.Get(e.name.lexeme)
+	case *Variable:
+		distance, ok := i.locals[expr]
+		if ok {
+			return i.env.GetAt(distance, e.name.lexeme), nil
+		}
+
+		value, ok := i.globals.Get(e.name.lexeme)
 		if !ok {
 			return nil, RuntimeError{
 				e.name, "Undefined Variable '" + e.name.lexeme + "'.",
 			}
 		}
 
-		return val, nil
-	case Assign:
-		if _, ok := i.env.Get(e.name.lexeme); !ok {
-			return nil, RuntimeError{
-				e.name, "Undefined Variable '" + e.name.lexeme + "'.",
-			}
-		}
-
+		return value, nil
+	case *Assign:
 		val, err := i.evaluate(e.value)
 		if err != nil {
 			return nil, err
 		}
 
-		i.env.SetInScope(e.name.lexeme, val)
+		distance, ok := i.locals[expr]
+		if ok {
+			i.env.SetAt(distance, e.name.lexeme, val)
+		} else {
+			i.globals.Set(e.name.lexeme, val)
+		}
 
-		return val, nil // not sure if we need to return e.value
-	case Unary:
+		return val, nil
+	case *Unary:
 		return i.evalUnary(e)
-	case Postfix:
+	case *Postfix:
 		return i.evalPostfix(e)
-	case Binary:
+	case *Binary:
 		return i.evalBinary(e)
-	case CallExpr:
+	case *CallExpr:
 		return i.evalCall(e)
-	case IfExpr:
+	case *IfExpr:
 		return i.evalIfExpr(e)
-	case Grouping:
+	case *Grouping:
 		return i.evaluate(e.expression)
-	case FunExpr:
+	case *FunExpr:
 		return &AnonFunction{expr: e, closure: i.env}, nil
-	case NoOpExpr:
+	case *NoOpExpr:
 		return nil, nil
 	default:
-		panic(fmt.Sprintf(
-			"Unimplemented Expression type: %T", e))
+		panic(fmt.Sprintf("Unimplemented Expression type: %T", e))
 	}
 }
 
-func (i *Interpreter) evalUnary(expr Unary) (any, error) {
+func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 	rhs, err := i.evaluate(expr.rhs)
 	if err != nil {
 		return nil, err
@@ -322,7 +325,7 @@ func (i *Interpreter) evalUnary(expr Unary) (any, error) {
 		// Check that the rhs is a VARIABLE, AND THEN check
 		// if it evaluates to a number
 		// TODO: This would be much nicer with a proper type system!
-		varExpr, ok := expr.rhs.(Variable)
+		varExpr, ok := expr.rhs.(*Variable)
 		if !ok {
 			return nil, RuntimeError{
 				tok: expr.op,
@@ -351,7 +354,7 @@ func (i *Interpreter) evalUnary(expr Unary) (any, error) {
 
 		return val - 1, nil
 	case PLUS_PLUS:
-		varExpr, ok := expr.rhs.(Variable)
+		varExpr, ok := expr.rhs.(*Variable)
 		if !ok {
 			return nil, RuntimeError{
 				tok: expr.op,
@@ -385,13 +388,13 @@ func (i *Interpreter) evalUnary(expr Unary) (any, error) {
 	}
 }
 
-func (i *Interpreter) evalPostfix(expr Postfix) (any, error) {
+func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 	lhs, err := i.evaluate(expr.lhs)
 	if err != nil {
 		return nil, err
 	}
 
-	ident, ok := expr.lhs.(Variable)
+	ident, ok := expr.lhs.(*Variable)
 	if !ok {
 		return nil, RuntimeError{
 			tok: expr.op,
@@ -428,7 +431,7 @@ func (i *Interpreter) evalPostfix(expr Postfix) (any, error) {
 	return val, nil
 }
 
-func (i *Interpreter) evalBinary(expr Binary) (any, error) {
+func (i *Interpreter) evalBinary(expr *Binary) (any, error) {
 	switch expr.op.typ {
 	case COMMA:
 		// discard lhs, return rhs
@@ -456,8 +459,8 @@ func (i *Interpreter) evalBinary(expr Binary) (any, error) {
 	panic("Unreachable.")
 }
 
-func (i *Interpreter) evalCall(expr CallExpr) (any, error) {
-	if v, ok := expr.callee.(Variable); ok {
+func (i *Interpreter) evalCall(expr *CallExpr) (any, error) {
+	if v, ok := expr.callee.(*Variable); ok {
 		if _, exists := i.env.Get(v.name.lexeme); !exists {
 			return nil, RuntimeError{v.name,
 				"Call to undeclared function '" + v.name.lexeme + "'",
@@ -512,7 +515,7 @@ func (i *Interpreter) evalCall(expr CallExpr) (any, error) {
 	return val, nil
 }
 
-func (i *Interpreter) evalEquality(expr Binary) (any, error) {
+func (i *Interpreter) evalEquality(expr *Binary) (any, error) {
 	lhs, err := i.evaluate(expr.lhs)
 	if err != nil {
 		return nil, err
@@ -553,7 +556,7 @@ func (i *Interpreter) evalEquality(expr Binary) (any, error) {
 	panic("Unreachable.")
 }
 
-func (i *Interpreter) evalComparison(expr Binary) (any, error) {
+func (i *Interpreter) evalComparison(expr *Binary) (any, error) {
 	lhs, err := i.evaluate(expr.lhs)
 	if err != nil {
 		return nil, err
@@ -577,18 +580,18 @@ func (i *Interpreter) evalComparison(expr Binary) (any, error) {
 	case nil:
 		return nil, RuntimeError{
 			tok: expr.op,
-			msg: "Cannot use " + expr.op.lexeme + " with nil.",
+			msg: "Cannot use '" + expr.op.lexeme + "' with nil.",
 		}
 	case bool:
 		return nil, RuntimeError{
 			tok: expr.op,
-			msg: "Cannot use " + expr.op.lexeme + " with boolean values.",
+			msg: "Cannot use '" + expr.op.lexeme + "' with boolean values.",
 		}
 	// TODO: Allow string comparison!
 	case string:
 		return nil, RuntimeError{
 			tok: expr.op,
-			msg: "Cannot use " + expr.op.lexeme + " with string values.",
+			msg: "Cannot use '" + expr.op.lexeme + "' with string values.",
 		}
 	case float64:
 		lhs := lhs.(float64)
@@ -608,7 +611,7 @@ func (i *Interpreter) evalComparison(expr Binary) (any, error) {
 	panic("Unreachable.")
 }
 
-func (i *Interpreter) evalMath(expr Binary) (any, error) {
+func (i *Interpreter) evalMath(expr *Binary) (any, error) {
 	lhs, err := i.evaluate(expr.lhs)
 	if err != nil {
 		return nil, err
@@ -672,7 +675,7 @@ func (i *Interpreter) evalMath(expr Binary) (any, error) {
 	panic("Unreachable.")
 }
 
-func (i *Interpreter) evalLogical(expr Binary) (any, error) {
+func (i *Interpreter) evalLogical(expr *Binary) (any, error) {
 	lhs, err := i.evaluate(expr.lhs)
 	if err != nil {
 		return nil, err
@@ -711,7 +714,7 @@ func (i *Interpreter) evalLogical(expr Binary) (any, error) {
 	panic("Unreachable.")
 }
 
-func (i *Interpreter) evalIfExpr(expr IfExpr) (any, error) {
+func (i *Interpreter) evalIfExpr(expr *IfExpr) (any, error) {
 	cond, err := i.evaluate(expr.condition)
 	if err != nil {
 		return nil, err

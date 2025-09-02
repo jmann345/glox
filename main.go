@@ -88,7 +88,9 @@ func run(source string, interpreter *Interpreter) {
 		fmt.Fprintln(os.Stderr, "Tokenizer:", err)
 	}
 
+	resolver := NewResolver(interpreter)
 	parser := Parser{toks, 0}
+	stmts := []Stmt{}
 	for !parser.IsAtEnd() {
 		stmt, err := parser.Parse()
 		if err != nil {
@@ -96,12 +98,21 @@ func run(source string, interpreter *Interpreter) {
 			continue
 		}
 
-		// TODO: multi-line interpretation
-		errs := interpreter.Interpret(stmt)
-		err = errs[0]
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "Runtime:", err)
-			// os.Exit(70) <-- Should only happen if running script tho
+		stmts = append(stmts, stmt)
+
+	}
+
+	for _, stmt := range stmts {
+		if err := resolver.Resolve(stmt); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			continue
+		}
+	}
+
+	for _, stmt := range stmts {
+		if err := interpreter.Interpret(stmt); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			continue
 		}
 	}
 }

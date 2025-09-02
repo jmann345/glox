@@ -1,7 +1,7 @@
 package main
 
 type Function struct {
-	decl    FunDecl
+	decl    *FunDecl
 	closure *Environment
 }
 
@@ -14,7 +14,7 @@ func (f *Function) Call(interpreter *Interpreter, arguments []any) any {
 
 	localEnv.Set(f.decl.name.lexeme, f) // Define function in its own scope so recursion works properly
 
-	body, ok := f.decl.body.(Block)
+	body, ok := f.decl.body.(*Block)
 	if !ok {
 		panic("Unreachable.")
 	}
@@ -37,7 +37,7 @@ func (f *Function) String() string {
 }
 
 type AnonFunction struct {
-	expr    FunExpr
+	expr    *FunExpr
 	closure *Environment
 }
 
@@ -48,7 +48,7 @@ func (f *AnonFunction) Call(interpreter *Interpreter, arguments []any) any {
 		localEnv.Set(f.expr.params[i].lexeme, arguments[i])
 	}
 
-	body, ok := f.expr.body.(Block)
+	body, ok := f.expr.body.(*Block)
 	if !ok {
 		panic("Unreachable.")
 	}
