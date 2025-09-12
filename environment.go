@@ -23,7 +23,7 @@ func (e *Environment) Get(key string) (any, bool) {
 }
 
 func (e *Environment) GetAt(distance int, key string) any {
-	for i := 0; i < distance; i++ {
+	for range distance {
 		e = e.enclosing
 	}
 
@@ -35,7 +35,7 @@ func (e *Environment) Set(key string, value any) {
 }
 
 func (e *Environment) SetAt(distance int, key string, value any) {
-	for i := 0; i < distance; i++ {
+	for range distance {
 		e = e.enclosing
 	}
 

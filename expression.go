@@ -29,7 +29,7 @@ type NoOpExpr struct{}
 
 func (NoOpExpr) isExpr() {}
 func (n NoOpExpr) String() string {
-	return "no-op"
+	return parenthesize("no-op")
 }
 
 type Assign struct {
@@ -65,6 +65,16 @@ func (c CallExpr) String() string {
 		c.paren.lexeme,
 		append([]Expr{c.callee}, c.arguments...)...,
 	)
+}
+
+type Get struct {
+	object Expr
+	name   Token
+}
+
+func (Get) isExpr() {}
+func (g Get) String() string {
+	return parenthesize(g.name.lexeme, g.object)
 }
 
 type IfExpr struct {
@@ -114,6 +124,26 @@ func (l Literal) String() string {
 		msg := fmt.Sprintf("Incompatible type: %T", v)
 		panic(msg)
 	}
+}
+
+type Set struct {
+	object Expr
+	name   Token
+	value  Expr
+}
+
+func (Set) isExpr() {}
+func (s Set) String() string {
+	return parenthesize(s.name.lexeme, s.object, s.value)
+}
+
+type This struct {
+	keyword Token
+}
+
+func (This) isExpr() {}
+func (t This) String() string {
+	return parenthesize(t.keyword.lexeme)
 }
 
 type Unary struct {

@@ -8,6 +8,7 @@ func (s *Stack[T]) Push(v T) {
 
 func (s *Stack[T]) Peek() T {
 	top := (*s)[len(*s)-1]
+
 	return top
 }
 

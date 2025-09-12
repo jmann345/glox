@@ -1,0 +1,60 @@
+# test_resolver.lox
+# Broad resolver checks. Active lines should PASS.
+# Uncomment FAIL blocks one at a time to confirm errors.
+
+# PASS: global declaration and use
+var a = 5;
+print a;
+
+# PASS: block scoping and shadowing
+{
+  var s = 1;
+  {
+    var s = 2;
+    print s;   # inner
+  }
+  print s;     # outer
+}
+
+# PASS: function declaration, recursion enabled, params used
+fun fact(n) {
+  if n <= 1 { return 1; } else { return n * fact(n - 1); }
+}
+print fact(5);
+
+# PASS: for loop has its own scope; initializer var is used
+{
+  for var i = 0; i < 3; i = i + 1 {
+    print i;
+  }
+}
+
+# PASS: read from outer scope inside inner block (marks outer as USED)
+{
+  var z = 7;
+  {
+    print z;
+  }
+}
+
+# # FAIL: read before declaration (same scope)
+# print b;
+# var b = 1;
+#
+# # FAIL: read in own initializer (global)
+# var c = c;
+#
+# # FAIL: duplicate declaration in the same scope
+# {
+#   var d = 1;
+#   var d = 2;   # same scope, should error
+# }
+#
+# # FAIL: assignment to undeclared variable
+# w = 10;
+#
+# # FAIL: return outside of function
+# return 1;
+#
+# # FAIL: break outside of loop
+# break;

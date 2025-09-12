@@ -90,17 +90,19 @@ func (p *Parser) synchronize() {
 	}
 }
 
-// declaration ::= funDecl | varDecl | statement
+// declaration ::= classDecl | funDecl | varDecl | statement
 func (p *Parser) parseDeclaration() (Stmt, error) {
 	var stmt Stmt
 	var err error
 	switch p.peekToken().typ {
+	case CLASS:
+		stmt, err = p.parseClassDecl()
 	case VAR:
 		stmt, err = p.parseVarDecl()
 	case FUN:
 		// Check next token so we don't parse anonymous functions here
 		if p.peekNextToken().typ != LEFT_PAREN {
-			stmt, err = p.parseFunDecl()
+			stmt, err = p.parseFunDecl("function")
 			break // so we don't fallthrough to default
 		}
 		fallthrough
@@ -114,6 +116,40 @@ func (p *Parser) parseDeclaration() (Stmt, error) {
 	}
 
 	return stmt, nil
+}
+
+// classDecl ::= "class" IDENTIFIER "{" funDecl* "}"FunctionTyp
+func (p *Parser) parseClassDecl() (Stmt, error) {
+	if err := p.consumeToken(CLASS, "Expect 'class'."); err != nil {
+		return nil, err
+	}
+
+	name := p.peekToken()
+	if err := p.consumeToken(IDENTIFIER, "Expect class name."); err != nil {
+		return nil, err
+	}
+
+	err := p.consumeToken(LEFT_BRACE, "Expect '{' before class body.")
+	if err != nil {
+		return nil, err
+	}
+
+	methods := []Stmt{}
+	for !p.peekIsOneOf(RIGHT_BRACE, EOF) {
+		method, err := p.parseFunDecl("method")
+		if err != nil {
+			return nil, err
+		}
+
+		methods = append(methods, method)
+	}
+
+	err = p.consumeToken(RIGHT_BRACE, "Expect '}' after class body.")
+	if err != nil {
+		return nil, err
+	}
+
+	return &ClassDecl{name, methods}, nil
 }
 
 // varDecl ::= "var" IDENTIFIER ( "=" expression )? ";"
@@ -154,17 +190,20 @@ func (p *Parser) parseVarDecl() (Stmt, error) {
 }
 
 // funDecl ::= "fun" IDENTIFIER "(" parameters? ")" block
-func (p *Parser) parseFunDecl() (Stmt, error) {
-	if err := p.consumeToken(FUN, "Expect 'fun'."); err != nil {
-		return nil, err
+func (p *Parser) parseFunDecl(funTypStr string) (Stmt, error) {
+	if funTypStr == "function" {
+		if err := p.consumeToken(FUN, "Expect 'fun'."); err != nil {
+			return nil, err
+		}
 	}
 
 	name := p.peekToken()
-	if err := p.consumeToken(IDENTIFIER, "Expect function name."); err != nil {
+	err := p.consumeToken(IDENTIFIER, "Expect "+funTypStr+" name.")
+	if err != nil {
 		return nil, err
 	}
 
-	err := p.consumeToken(LEFT_PAREN, "Expect '(' after function name.")
+	err = p.consumeToken(LEFT_PAREN, "Expect '(' after "+funTypStr+" name.")
 	if err != nil {
 		return nil, err
 	}
@@ -473,7 +512,7 @@ func (p *Parser) parseExpression() (Expr, error) {
 	return p.parseAssignment()
 }
 
-// assignment ::= IDENTIFIER '=' assignment | comma
+// assignment ::= ( call "." )? IDENTIFIER '=' assignment | comma
 func (p *Parser) parseAssignment() (Expr, error) {
 	expr, err := p.parseComma()
 	if err != nil {
@@ -488,8 +527,12 @@ func (p *Parser) parseAssignment() (Expr, error) {
 			return nil, err
 		}
 
-		if expr, ok := expr.(*Variable); ok {
-			return &Assign{expr.name, value}, nil
+		if varExpr, ok := expr.(*Variable); ok {
+			return &Assign{varExpr.name, value}, nil
+		}
+
+		if getExpr, ok := expr.(*Get); ok {
+			return &Set{getExpr.object, getExpr.name, value}, nil
 		}
 
 		return nil, ParseError{tok, "Invalid assignment target."}
@@ -744,25 +787,38 @@ func (p *Parser) parsePostfix() (Expr, error) {
 	return expr, nil
 }
 
-// call ::= primary ( "(" arguments? ")" )*
+// call ::= primary ( "(" arguments? ")" | "." IDENTIFIER )*
 func (p *Parser) parseCall() (Expr, error) {
 	expr, err := p.parsePrimary()
 	if err != nil {
 		return nil, err
 	}
 
-	if paren, ok := p.consumeOneOf(LEFT_PAREN); ok {
-		args, err := p.parseArguments()
-		if err != nil {
-			return nil, err
-		}
+	for {
+		if paren, ok := p.consumeOneOf(LEFT_PAREN); ok {
+			args, err := p.parseArguments()
+			if err != nil {
+				return nil, err
+			}
 
-		err = p.consumeToken(RIGHT_PAREN, "Expect ')' after arguments.")
-		if err != nil {
-			return nil, err
-		}
+			err = p.consumeToken(RIGHT_PAREN, "Expect ')' after arguments.")
+			if err != nil {
+				return nil, err
+			}
 
-		return &CallExpr{expr, paren, args}, nil
+			expr = &CallExpr{expr, paren, args}
+		} else if _, ok := p.consumeOneOf(DOT); ok {
+			name := p.peekToken()
+
+			err = p.consumeToken(IDENTIFIER, "Expect property name after '.'")
+			if err != nil {
+				return nil, err
+			}
+
+			expr = &Get{expr, name}
+		} else {
+			break
+		}
 	}
 
 	return expr, nil
@@ -836,6 +892,8 @@ func (p *Parser) parsePrimary() (Expr, error) {
 		}
 
 		return &Grouping{expr}, nil
+	case THIS:
+		return &This{tok}, nil
 	case IDENTIFIER:
 		return &Variable{tok}, nil
 	case IF:

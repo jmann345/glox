@@ -58,8 +58,30 @@ func (i *Interpreter) execute(stmt Stmt) (any, error) {
 
 		return nil, nil
 	case *FunDecl:
-		function := &Function{decl: s, closure: i.env}
-		i.env.Set(s.name.lexeme, function)
+		i.env.Set(s.name.lexeme, &Function{
+			decl: s, closure: i.env, isInitializer: false,
+		})
+
+		return nil, nil
+	case *ClassDecl:
+		i.env.Set(s.name.lexeme, nil)
+
+		methods := make(map[string]*Function)
+		for _, meth := range s.methods {
+			method, ok := meth.(*FunDecl)
+			if !ok {
+				panic("Unreachable.")
+			}
+
+			methods[method.name.lexeme] = &Function{
+				decl:          method,
+				closure:       i.env,
+				isInitializer: method.name.lexeme == "init",
+			}
+		}
+
+		class := &Class{s.name.lexeme, methods}
+		i.env.SetInScope(s.name.lexeme, class)
 
 		return nil, nil
 	case *Block:
@@ -240,33 +262,9 @@ func (i *Interpreter) evaluate(expr Expr) (any, error) {
 	case *Literal:
 		return e.value, nil
 	case *Variable:
-		distance, ok := i.locals[expr]
-		if ok {
-			return i.env.GetAt(distance, e.name.lexeme), nil
-		}
-
-		value, ok := i.globals.Get(e.name.lexeme)
-		if !ok {
-			return nil, RuntimeError{
-				e.name, "Undefined Variable '" + e.name.lexeme + "'.",
-			}
-		}
-
-		return value, nil
+		return i.lookUpVariable(e.name, expr)
 	case *Assign:
-		val, err := i.evaluate(e.value)
-		if err != nil {
-			return nil, err
-		}
-
-		distance, ok := i.locals[expr]
-		if ok {
-			i.env.SetAt(distance, e.name.lexeme, val)
-		} else {
-			i.globals.Set(e.name.lexeme, val)
-		}
-
-		return val, nil
+		return i.assignVariable(e.name, e.value, expr)
 	case *Unary:
 		return i.evalUnary(e)
 	case *Postfix:
@@ -277,6 +275,12 @@ func (i *Interpreter) evaluate(expr Expr) (any, error) {
 		return i.evalCall(e)
 	case *IfExpr:
 		return i.evalIfExpr(e)
+	case *Get:
+		return i.evalGet(e)
+	case *Set:
+		return i.evalSet(e)
+	case *This:
+		return i.lookUpVariable(e.keyword, expr)
 	case *Grouping:
 		return i.evaluate(e.expression)
 	case *FunExpr:
@@ -286,6 +290,39 @@ func (i *Interpreter) evaluate(expr Expr) (any, error) {
 	default:
 		panic(fmt.Sprintf("Unimplemented Expression type: %T", e))
 	}
+}
+
+func (i *Interpreter) lookUpVariable(name Token, expr Expr) (any, error) {
+	if distance, ok := i.locals[expr]; ok {
+		return i.env.GetAt(distance, name.lexeme), nil
+	}
+
+	val, ok := i.globals.Get(name.lexeme)
+	if !ok {
+		return nil, RuntimeError{
+			name, "Undefined Variable '" + name.lexeme + "'.",
+		}
+	}
+
+	return val, nil
+}
+
+func (i *Interpreter) assignVariable(
+	name Token, value Expr, expr Expr,
+) (any, error) {
+	val, err := i.evaluate(value)
+	if err != nil {
+		return nil, err
+	}
+
+	distance, ok := i.locals[expr]
+	if ok {
+		i.env.SetAt(distance, name.lexeme, val)
+	} else {
+		i.globals.Set(name.lexeme, val)
+	}
+
+	return val, nil
 }
 
 func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
@@ -735,4 +772,36 @@ func (i *Interpreter) evalIfExpr(expr *IfExpr) (any, error) {
 	} else {
 		return i.evaluate(expr.elseBranch)
 	}
+}
+
+func (i *Interpreter) evalGet(expr *Get) (any, error) {
+	object, err := i.evaluate(expr.object)
+	if err != nil {
+		return nil, err
+	}
+
+	if object, ok := object.(*Object); ok {
+		return object.Get(expr.name)
+	}
+
+	return nil, RuntimeError{expr.name, "Only objects have properties."}
+}
+
+func (i *Interpreter) evalSet(expr *Set) (any, error) {
+	object, err := i.evaluate(expr.object)
+	if err != nil {
+		return nil, err
+	}
+
+	if object, ok := object.(*Object); ok {
+		value, err := i.evaluate(expr.value)
+		if err != nil {
+			return nil, err
+		}
+
+		object.Set(expr.name, value)
+		return value, nil
+	}
+
+	return nil, RuntimeError{expr.name, "Only objects have fields."}
 }

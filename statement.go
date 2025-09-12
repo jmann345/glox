@@ -17,14 +17,25 @@ func (n NoOpStmt) String() string {
 	return "no-op"
 }
 
+type ClassDecl struct {
+	name    Token
+	methods []Stmt
+}
+
+func (ClassDecl) isStmt() {}
+
 type VarDecl struct {
 	name        Token
 	initializer Expr
 }
 
+func (c ClassDecl) String() string {
+	return c.name.lexeme
+}
+
 func (VarDecl) isStmt() {}
 func (d VarDecl) String() string {
-	return "var " + d.name.lexeme + " = " + d.initializer.String() + ";"
+	return d.name.lexeme
 }
 
 type FunDecl struct {

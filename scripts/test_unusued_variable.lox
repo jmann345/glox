@@ -1,0 +1,40 @@
+# PASS: used local in a block
+{
+  var used = 1;
+  print used;
+}
+
+# PASS: shadowing with both used
+{
+  var x = 1;
+  {
+    var x = 2;
+    print x;
+  }
+  print x;
+}
+
+# PASS: function with param used
+fun ok(p) {
+  print p;
+}
+ok(42);
+
+
+# FAIL: unused local variable in block (should error at block end)
+{
+  var u = 999;
+}
+
+# FAIL: unused function parameter (should error at function end)
+fun bad(p) {
+  print 0; # p is never used
+}
+bad(1);
+
+# FAIL: unused local after assignment-only if your policy requires a read
+# (Uncomment only if you want assignment-not-counted-as-use)
+{
+  var a = 0;
+  a = 1;   # assigned, never read
+}

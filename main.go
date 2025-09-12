@@ -30,15 +30,11 @@ func main() {
 		fmt.Println("Usage: glox <script>")
 		os.Exit(64)
 	} else if numArgs == 2 {
-		err := runFile(os.Args[1])
-		if err != nil {
+		if err := runFile(os.Args[1]); err != nil {
 			log.Fatal(err)
 		}
-	} else {
-		err := runPrompt()
-		if err != nil {
-			log.Fatal(err)
-		}
+	} else if err := runPrompt(); err != nil {
+		log.Fatal(err)
 	}
 }
 
@@ -54,7 +50,9 @@ func runFile(path string) error {
 	}
 
 	interpreter := NewInterpreter()
-	run(string(buff), interpreter)
+	resolver := NewResolver(interpreter)
+
+	run(string(buff), resolver)
 
 	return nil
 }
@@ -62,6 +60,7 @@ func runFile(path string) error {
 func runPrompt() error {
 	reader := bufio.NewReader(os.Stdin)
 	interpreter := NewInterpreter()
+	resolver := NewResolver(interpreter)
 	for i := 1; ; i++ {
 		fmt.Print("[" + strconv.Itoa(i) + "] ")
 
@@ -74,21 +73,21 @@ func runPrompt() error {
 			break
 		}
 
-		run(line, interpreter)
+		run(line, resolver)
 	}
 
 	return nil
 }
 
-func run(source string, interpreter *Interpreter) {
+func run(source string, resolver *Resolver) {
 	tokenizer := new(Tokenizer)
 	tokenizer.Init(source)
+
 	toks, errs := tokenizer.Tokenize()
 	for _, err := range errs {
 		fmt.Fprintln(os.Stderr, "Tokenizer:", err)
 	}
 
-	resolver := NewResolver(interpreter)
 	parser := Parser{toks, 0}
 	stmts := []Stmt{}
 	for !parser.IsAtEnd() {
@@ -99,20 +98,21 @@ func run(source string, interpreter *Interpreter) {
 		}
 
 		stmts = append(stmts, stmt)
-
 	}
 
+	var err error
 	for _, stmt := range stmts {
-		if err := resolver.Resolve(stmt); err != nil {
+		if err = resolver.Resolve(stmt); err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			continue
 		}
 	}
 
-	for _, stmt := range stmts {
-		if err := interpreter.Interpret(stmt); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			continue
+	if err == nil {
+		interpreter := resolver.interpreter
+		for _, stmt := range stmts {
+			if err = interpreter.Interpret(stmt); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
 		}
 	}
 }
