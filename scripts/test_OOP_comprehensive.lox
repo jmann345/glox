@@ -1,0 +1,51 @@
+# expected_static_methods.lox
+# Positive tests with inline expectations
+
+# 1) Basic static call
+class Math { class square(n) { return n * n; } }
+print "EXPECT: 9";
+print Math.square(3);
+
+# 2) Instance vs static with same name are distinct
+class A {
+  p() { return "inst"; }
+  class p() { return "stat"; }
+}
+print "EXPECT: inst";
+print A().p();
+print "EXPECT: stat";
+print A.p();
+
+# TODO: Uncomment 3-4 after adding inh*ritance
+# # 3) Static method inheritance
+# class P { class id(x) { return x; } }
+# class C < P {}
+# print "EXPECT: 7";
+# print C.id(7);
+
+# # 4) Static override
+# class B1 { class who() { return "B1"; } }
+# class B2 < B1 { class who() { return "B2"; } }
+# print "EXPECT: B1";
+# print B1.who();
+# print "EXPECT: B2";
+# print B2.who();
+
+
+# 5) Constructor initializes fields; constructor return is ignored (normal path)
+class Ctor {
+  init() { this.x = 5; }
+  get() { return this.x; }
+}
+print "EXPECT: 5";
+print Ctor().get();
+
+# 6) Both instance and static exist; dispatch goes to the right one
+class Dual {
+  name() { return "inst"; }
+  class name() { return "stat"; }
+}
+print "EXPECT: inst";
+print Dual().name();
+print "EXPECT: stat";
+print Dual.name();

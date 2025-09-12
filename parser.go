@@ -118,7 +118,7 @@ func (p *Parser) parseDeclaration() (Stmt, error) {
 	return stmt, nil
 }
 
-// classDecl ::= "class" IDENTIFIER "{" funDecl* "}"FunctionTyp
+// classDecl ::= "class" IDENTIFIER "{" funDecl* "}"
 func (p *Parser) parseClassDecl() (Stmt, error) {
 	if err := p.consumeToken(CLASS, "Expect 'class'."); err != nil {
 		return nil, err

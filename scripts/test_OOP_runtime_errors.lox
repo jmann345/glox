@@ -1,0 +1,9 @@
+# 1) Calling an undefined static method should error
+class B {}
+B.nope();  # expect runtime error: undefined class method 'nope'
+
+# 2) Returning a value from an initializer should be an error (if enforced)
+class Boom {
+  init() { return 123; }  # expect runtime error: cannot return a value from init
+}
+Boom();

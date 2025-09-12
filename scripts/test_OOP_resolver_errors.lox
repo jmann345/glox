@@ -1,0 +1,15 @@
+# errors_resolver.lox
+# These should fail during resolution/analysis (before execution).
+
+# E1) 'this' is not allowed in static methods
+class E1 {
+  class bad() { print this; }  # expect resolver error: 'this' in static method
+}
+E1.bad();
+
+# # E2) 'super' is not allowed in static methods (unless you intentionally support class-super)
+# class P { fun who() { return "P"; } }
+# class C < P {
+#   class bad() { print super.who(); }  # expect resolver error: 'super' in static method
+# }
+# C.bad();
