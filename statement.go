@@ -18,19 +18,19 @@ func (n NoOpStmt) String() string {
 }
 
 type ClassDecl struct {
-	name    Token
-	methods []Stmt
+	name          Token
+	methods       []Stmt
+	staticMethods []Stmt
 }
 
 func (ClassDecl) isStmt() {}
+func (c ClassDecl) String() string {
+	return c.name.lexeme
+}
 
 type VarDecl struct {
 	name        Token
 	initializer Expr
-}
-
-func (c ClassDecl) String() string {
-	return c.name.lexeme
 }
 
 func (VarDecl) isStmt() {}

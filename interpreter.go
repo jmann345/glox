@@ -80,7 +80,21 @@ func (i *Interpreter) execute(stmt Stmt) (any, error) {
 			}
 		}
 
-		class := &Class{s.name.lexeme, methods}
+		staticMethods := make(map[string]*Function)
+		for _, meth := range s.staticMethods {
+			method, ok := meth.(*FunDecl)
+			if !ok {
+				panic("Unreachable.")
+			}
+
+			staticMethods[method.name.lexeme] = &Function{
+				decl:          method,
+				closure:       i.env,
+				isInitializer: false,
+			}
+		}
+
+		class := &Class{s.name.lexeme, methods, staticMethods}
 		i.env.SetInScope(s.name.lexeme, class)
 
 		return nil, nil
@@ -361,64 +375,115 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 		// But the increment/decrement operators need to both
 		// Check that the rhs is a VARIABLE, AND THEN check
 		// if it evaluates to a number
-		// TODO: This would be much nicer with a proper type system!
-		varExpr, ok := expr.rhs.(*Variable)
-		if !ok {
+		switch e := expr.rhs.(type) {
+		case *Variable:
+			key := e.name.lexeme
+			_, ok := i.env.Get(key)
+			if !ok {
+				return nil, RuntimeError{e.name,
+					"Use of undeclared identifier '" + key + "'",
+				}
+			}
+
+			val, ok := rhs.(float64)
+			if !ok {
+				return nil, RuntimeError{
+					tok: expr.op,
+					msg: "'--' operand must be a number",
+				}
+			}
+
+			i.env.SetInScope(key, val-1)
+
+			return val - 1, nil
+		case *Get:
+			object, err := i.evaluate(e.object)
+			if err != nil {
+				return nil, err
+			}
+
+			if obj, ok := object.(Object); ok {
+				rhs, err := obj.Get(e.name)
+				if err != nil {
+					return nil, err
+				}
+
+				val, ok := rhs.(float64)
+				if !ok {
+					return nil, RuntimeError{
+						tok: expr.op,
+						msg: "'--' operand must be a number",
+					}
+				}
+
+				obj.Set(e.name, val-1)
+
+				return val - 1, nil
+			}
+
+			return nil, RuntimeError{expr.op,
+				"'--' target must be an object property"}
+		default:
 			return nil, RuntimeError{
 				tok: expr.op,
 				msg: "Expression is not assignable",
 			}
 		}
-
-		key := varExpr.name.lexeme
-		_, ok = i.env.Get(key)
-		if !ok {
-			return nil, RuntimeError{
-				varExpr.name,
-				"Use of undeclared identifier '" + key + "'",
-			}
-		}
-
-		val, ok := rhs.(float64)
-		if !ok {
-			return nil, RuntimeError{
-				tok: expr.op,
-				msg: "'--' operand must be a number",
-			}
-		}
-
-		i.env.SetInScope(key, val-1)
-
-		return val - 1, nil
 	case PLUS_PLUS:
-		varExpr, ok := expr.rhs.(*Variable)
-		if !ok {
+		switch e := expr.rhs.(type) {
+		case *Variable:
+			key := e.name.lexeme
+			_, ok := i.env.Get(key)
+			if !ok {
+				return nil, RuntimeError{e.name,
+					"Use of undeclared identifier '" + key + "'",
+				}
+			}
+
+			val, ok := rhs.(float64)
+			if !ok {
+				return nil, RuntimeError{
+					tok: expr.op,
+					msg: "'++' operand must be a number",
+				}
+			}
+
+			i.env.SetInScope(key, val+1)
+
+			return val + 1, nil
+		case *Get:
+			object, err := i.evaluate(e.object)
+			if err != nil {
+				return nil, err
+			}
+
+			if obj, ok := object.(Object); ok {
+				rhs, err := obj.Get(e.name)
+				if err != nil {
+					return nil, err
+				}
+
+				val, ok := rhs.(float64)
+				if !ok {
+					return nil, RuntimeError{
+						tok: expr.op,
+						msg: "'++' operand must be a number",
+					}
+				}
+
+				obj.Set(e.name, val+1)
+
+				return val + 1, nil
+			}
+
+			return nil, RuntimeError{expr.op,
+				"'++' target must be an object property"}
+		default:
 			return nil, RuntimeError{
 				tok: expr.op,
 				msg: "Expression is not assignable",
 			}
 		}
-
-		key := varExpr.name.lexeme
-		_, ok = i.env.Get(key)
-		if !ok {
-			return nil, RuntimeError{
-				varExpr.name,
-				"Use of undeclared identifier '" + key + "'",
-			}
-		}
-
-		val, ok := rhs.(float64)
-		if !ok {
-			return nil, RuntimeError{
-				tok: expr.op,
-				msg: "'++' operand must be a number",
-			}
-		}
-
-		i.env.SetInScope(key, val+1)
-
-		return val + 1, nil
 	default:
 		panic(fmt.Sprintf(
 			"Unreachable: unexpected unary operand: %v", expr.op))
@@ -431,41 +496,68 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 		return nil, err
 	}
 
-	ident, ok := expr.lhs.(*Variable)
-	if !ok {
+	switch e := expr.lhs.(type) {
+	case *Variable:
+		key := e.name.lexeme
+		if _, ok := i.env.Get(key); !ok {
+			return nil, RuntimeError{e.name,
+				"Use of undeclared identifier '" + key + "'",
+			}
+		}
+
+		val, ok := lhs.(float64)
+		if !ok {
+			return nil, RuntimeError{
+				tok: expr.op,
+				msg: "'" + expr.op.lexeme + "' operand must be a number",
+			}
+		}
+
+		switch expr.op.typ {
+		case MINUS_MINUS:
+			i.env.SetInScope(key, val-1)
+		case PLUS_PLUS:
+			i.env.SetInScope(key, val+1)
+		default:
+			panic("Unreachable.")
+		}
+
+		return val, nil
+	case *Get:
+		object, err := i.evaluate(e.object)
+		if err != nil {
+			return nil, err
+		}
+
+		if obj, ok := object.(Object); ok {
+			val, ok := lhs.(float64)
+			if !ok {
+				return nil, RuntimeError{
+					tok: expr.op,
+					msg: "'" + expr.op.lexeme + "' operand must be a number",
+				}
+			}
+
+			switch expr.op.typ {
+			case MINUS_MINUS:
+				obj.Set(e.name, val-1)
+			case PLUS_PLUS:
+				obj.Set(e.name, val+1)
+			default:
+				panic("Unreachable.")
+			}
+
+			return val, nil
+		}
+
+		return nil, RuntimeError{expr.op,
+			"'" + expr.op.lexeme + "' target must be an object property"}
+	default:
 		return nil, RuntimeError{
 			tok: expr.op,
 			msg: "Expression is not assignable",
 		}
 	}
-
-	key := ident.name.lexeme
-	_, ok = i.env.Get(key)
-	if !ok {
-		return nil, RuntimeError{
-			ident.name,
-			"Use of undeclared identifier '" + key + "'",
-		}
-	}
-
-	val, ok := lhs.(float64)
-	if !ok {
-		return nil, RuntimeError{
-			tok: expr.op,
-			msg: "'" + expr.op.lexeme + "' operand must be a number",
-		}
-	}
-
-	switch expr.op.typ {
-	case MINUS_MINUS:
-		i.env.SetInScope(key, val-1)
-	case PLUS_PLUS:
-		i.env.SetInScope(key, val+1)
-	default:
-		panic("Unreachable.")
-	}
-
-	return val, nil
 }
 
 func (i *Interpreter) evalBinary(expr *Binary) (any, error) {
@@ -491,9 +583,9 @@ func (i *Interpreter) evalBinary(expr *Binary) (any, error) {
 		return i.evalMath(expr)
 	case AND, OR:
 		return i.evalLogical(expr)
+	default:
+		panic("Unreachable.")
 	}
-
-	panic("Unreachable.")
 }
 
 func (i *Interpreter) evalCall(expr *CallExpr) (any, error) {
@@ -780,8 +872,8 @@ func (i *Interpreter) evalGet(expr *Get) (any, error) {
 		return nil, err
 	}
 
-	if object, ok := object.(*Object); ok {
-		return object.Get(expr.name)
+	if obj, ok := object.(Object); ok {
+		return obj.Get(expr.name)
 	}
 
 	return nil, RuntimeError{expr.name, "Only objects have properties."}
@@ -793,13 +885,16 @@ func (i *Interpreter) evalSet(expr *Set) (any, error) {
 		return nil, err
 	}
 
-	if object, ok := object.(*Object); ok {
+	if obj, ok := object.(Object); ok {
 		value, err := i.evaluate(expr.value)
 		if err != nil {
 			return nil, err
 		}
 
-		object.Set(expr.name, value)
+		if err := obj.Set(expr.name, value); err != nil {
+			return nil, err
+		}
+
 		return value, nil
 	}
 

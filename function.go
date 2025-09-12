@@ -6,7 +6,7 @@ type Function struct {
 	isInitializer bool
 }
 
-func (f *Function) Bind(instance *Object) *Function {
+func (f *Function) Bind(instance *Instance) *Function {
 	env := NewEnvironment(f.closure)
 	env.Set("this", instance)
 

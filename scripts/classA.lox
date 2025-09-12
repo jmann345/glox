@@ -1,0 +1,3 @@
+class A { p(){ return "inst"; } class p(){ return "stat"; } }
+print A().p();  # inst
+print A.p();    # stat

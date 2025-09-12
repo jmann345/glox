@@ -14,7 +14,7 @@ type Callable interface {
 // Built-In Example:
 type Clock struct{}
 
-func (c Clock) Call(interpreter *Interpreter, arguments []any) any {
+func (c Clock) Call(_ *Interpreter, _ []any) any {
 	return float64(time.Now().UnixNano()) / 1e9
 }
 

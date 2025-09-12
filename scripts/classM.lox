@@ -1,0 +1,3 @@
+class M {}
+M.f = fun(){ return 42; };
+print M.f();  # 42

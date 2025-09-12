@@ -34,6 +34,7 @@ const (
 	FUNCTION
 	INITIALIZER
 	METHOD
+	STATIC_METHOD
 )
 
 type ClassType byte
@@ -223,8 +224,6 @@ func (r *Resolver) resClassStmt(stmt *ClassDecl) (err error) {
 		Token{THIS, "this", nil, -1}, USED, // Allow "this" to be unused
 	}
 
-	defer r.endScope(&err)
-
 	for _, meth := range stmt.methods {
 		method, ok := meth.(*FunDecl)
 		if !ok {
@@ -239,6 +238,24 @@ func (r *Resolver) resClassStmt(stmt *ClassDecl) (err error) {
 		}
 
 		if err = r.resFunctionStmt(method, declaration); err != nil {
+			r.endScope(&err)
+			return
+		}
+	}
+
+	// pop closure so static methods can't access 'this' or 'super'
+	r.endScope(&err)
+
+	r.beginScope() // static closure
+	defer r.endScope(&err)
+
+	for _, meth := range stmt.staticMethods {
+		method, ok := meth.(*FunDecl)
+		if !ok {
+			panic("Unreachable.")
+		}
+
+		if err = r.resFunctionStmt(method, STATIC_METHOD); err != nil {
 			return
 		}
 	}

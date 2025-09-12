@@ -135,13 +135,24 @@ func (p *Parser) parseClassDecl() (Stmt, error) {
 	}
 
 	methods := []Stmt{}
+	staticMethods := []Stmt{}
 	for !p.peekIsOneOf(RIGHT_BRACE, EOF) {
+		static := false
+		if p.peekToken().typ == CLASS {
+			p.current++ // consume "class"
+			static = true
+		}
+
 		method, err := p.parseFunDecl("method")
 		if err != nil {
 			return nil, err
 		}
 
-		methods = append(methods, method)
+		if static {
+			staticMethods = append(staticMethods, method)
+		} else {
+			methods = append(methods, method)
+		}
 	}
 
 	err = p.consumeToken(RIGHT_BRACE, "Expect '}' after class body.")
@@ -149,7 +160,7 @@ func (p *Parser) parseClassDecl() (Stmt, error) {
 		return nil, err
 	}
 
-	return &ClassDecl{name, methods}, nil
+	return &ClassDecl{name, methods, staticMethods}, nil
 }
 
 // varDecl ::= "var" IDENTIFIER ( "=" expression )? ";"
