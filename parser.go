@@ -82,10 +82,10 @@ func (p *Parser) synchronize() {
 			return
 		}
 
-		if p.peekIsOneOf(
-			CLASS, FUN, VAR, FOR, IF, WHILE, PRINT, RETURN) {
+		if p.peekIsOneOf(CLASS, FUN, VAR, FOR, IF, WHILE, PRINT, RETURN) {
 			return
 		}
+
 		p.current++
 	}
 }
@@ -409,7 +409,6 @@ func (p *Parser) parseWhileStmt() (Stmt, error) {
 }
 
 // for ::= "for" ( varDecl | exprStmt | ";" )
-//
 //	             expression? ";"
 //	             expression?
 //				 block
@@ -524,10 +523,9 @@ func (p *Parser) parseExpression() (Expr, error) {
 	return p.parseAssignment()
 }
 
-// assignment ::=
-//     comma
-//     | ( call "." ) IDENTIFIER ( ( "=" assignment )
-//     						     | ( "-=" | "+=" | "/=" | "*=" ) expression )
+// assignment ::= comma
+//                | call ( ( "=" assignment ) 
+// 					     | ( ( "-=" | "+=" | "/=" | "*=" ) expression ) )
 func (p *Parser) parseAssignment() (Expr, error) {
 	expr, err := p.parseComma()
 	if err != nil {
@@ -542,38 +540,45 @@ func (p *Parser) parseAssignment() (Expr, error) {
 			return nil, err
 		}
 
-		if varExpr, ok := expr.(*Variable); ok {
-			return &Assign{varExpr.name, value}, nil
+		switch e := expr.(type) {
+		case *Variable:
+			return &Assign{e.name, value}, nil
+		case *Index:
+			return &SetIndex{e.list, e.bracket, e.index, value}, nil
+		case *Get:
+			return &Set{e.object, e.name, value}, nil
+		default:
+			return nil, ParseError{tok, "Invalid assignment target."}
 		}
-
-		if getExpr, ok := expr.(*Get); ok {
-			return &Set{getExpr.object, getExpr.name, value}, nil
-		}
-
-		return nil, ParseError{tok, "Invalid assignment target."}
 	}
 
-	if op, ok := p.consumeOneOf(
+	if tok, ok := p.consumeOneOf(
 		MINUS_EQUAL, PLUS_EQUAL, SLASH_EQUAL, STAR_EQUAL,
-	); ok { // desugar lhs .= rhs into lhs = lhs . rhs
-		op = op.UnderlyingOp()
+	); ok { // Desugar lhs .= rhs into lhs = lhs . rhs
+		op := tok.UnderlyingOp()
 
 		rhs, err := p.parseExpression()
 		if err != nil {
 			return nil, err
 		}
 
-		if lhs, ok := expr.(*Variable); ok {
+		switch e := expr.(type) {
+		case *Variable:
 			return &Assign{
-				lhs.name, &Binary{lhs, op, rhs},
+				e.name, &Binary{e, op, rhs},
 			}, nil
+		case *Index:
+			return &SetIndex{
+				e.list, e.bracket, e.index, &Binary{e, op, rhs},
+			}, nil
+		case *Get:
+			return &Set{
+				e.object, e.name, &Binary{e, op, rhs},
+			}, nil
+		default:
+			return nil, ParseError{tok, "Invalid assignment target."}
 		}
 
-		if lhs, ok := expr.(*Get); ok {
-			return &Set{
-				lhs.object, lhs.name, &Binary{lhs, op, rhs},
-			}, nil
-		}
 	}
 
 	return expr, nil
@@ -686,8 +691,7 @@ func (p *Parser) parseEquality() (Expr, error) {
 	// a < b < c (methinks)
 	// NOTE: 'a < b < c' is currently unsupported tho :(
 	for p.peekIsOneOf(BANG_EQUAL, EQUAL_EQUAL) {
-		p.current++
-		op := p.tokens[p.current-1]
+		op := p.peekAndConsume()
 
 		rhs, err := p.parseComparison()
 		if err != nil {
@@ -723,9 +727,8 @@ func (p *Parser) parseComparison() (Expr, error) {
 	// TODO: Allow for chain comparisons
 	// e.g. we want to desugar 1 < 2 < 3  into (1 < 2) and (2 < 3)
 	for p.peekIsOneOf(GREATER, GREATER_EQUAL, LESS, LESS_EQUAL) {
-		p.current++
+		op := p.peekAndConsume()
 
-		op := p.tokens[p.current-1]
 		rhs, err := p.parseTerm()
 		if err != nil {
 			return nil, err
@@ -783,9 +786,8 @@ func (p *Parser) parseFactor() (Expr, error) {
 	}
 
 	for p.peekIsOneOf(SLASH, STAR) {
-		p.current++
+		op := p.peekAndConsume()
 
-		op := p.tokens[p.current-1]
 		rhs, err := p.parseUnary()
 		if err != nil {
 			return nil, err
@@ -811,9 +813,9 @@ func (p *Parser) parseUnary() (Expr, error) {
 	return p.parsePostfix()
 }
 
-// postfix ::= call ( '--' | '++' )? )
+// postfix ::= index ( '--' | '++' )? 
 func (p *Parser) parsePostfix() (Expr, error) {
-	expr, err := p.parseCall()
+	expr, err := p.parseIndex()
 	if err != nil {
 		return nil, err
 	}
@@ -825,15 +827,42 @@ func (p *Parser) parsePostfix() (Expr, error) {
 	return expr, nil
 }
 
-// call ::= primary ( "(" arguments? ")" | "." IDENTIFIER )*
+// index ::= call ( "[" logicalOr "]" )*
+func (p *Parser) parseIndex() (Expr, error) {
+	expr, err := p.parseCall()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.peekToken().typ == LEFT_BRACKET {
+		op := p.peekAndConsume()
+
+		index, err := p.parseLogicalOr()
+		if err != nil {
+			return nil, err
+		}
+
+		err = p.consumeToken(RIGHT_BRACKET, "Expect ']' after index.")
+		if err != nil {
+			return nil, err
+		}
+
+		expr = &Index{expr, op, index}
+	}
+
+	return expr, nil
+}
+
+// call ::= primary ( "(" arguments? ")" | "." IDENTIFIER | )*
 func (p *Parser) parseCall() (Expr, error) {
 	expr, err := p.parsePrimary()
 	if err != nil {
 		return nil, err
 	}
 
-	for {
-		if paren, ok := p.consumeOneOf(LEFT_PAREN); ok {
+	for repeat := true; repeat; {
+		switch tok := p.peekAndConsume(); tok.typ {
+		case LEFT_PAREN:
 			args, err := p.parseArguments()
 			if err != nil {
 				return nil, err
@@ -844,8 +873,8 @@ func (p *Parser) parseCall() (Expr, error) {
 				return nil, err
 			}
 
-			expr = &CallExpr{expr, paren, args}
-		} else if _, ok := p.consumeOneOf(DOT); ok {
+			expr = &CallExpr{expr, tok, args}
+		case DOT:
 			name := p.peekToken()
 
 			err = p.consumeToken(IDENTIFIER, "Expect property name after '.'")
@@ -854,8 +883,9 @@ func (p *Parser) parseCall() (Expr, error) {
 			}
 
 			expr = &Get{expr, name}
-		} else {
-			break
+		default:
+			p.current-- // puke the last token
+			repeat = false
 		}
 	}
 
@@ -903,7 +933,8 @@ func (p *Parser) parseArguments() ([]Expr, error) {
  * 			 | 'true' | 'false' | 'nil'
  * 			 | ( expression )
  * 			 | IDENTIFIER
- *			 | IfExpr
+ * 			 | list
+ *			 | ifExpr
  * 			 | anonFunction
  */
 func (p *Parser) parsePrimary() (Expr, error) {
@@ -934,6 +965,8 @@ func (p *Parser) parsePrimary() (Expr, error) {
 		return &This{tok}, nil
 	case IDENTIFIER:
 		return &Variable{tok}, nil
+	case LEFT_BRACKET:
+		return p.parseList()
 	case IF:
 		return p.parseIfExpr()
 	case FUN:
@@ -943,31 +976,31 @@ func (p *Parser) parsePrimary() (Expr, error) {
 	}
 }
 
-// anonFunction ::= "fun" "(" parameters? ")" block
-func (p *Parser) parseAnonFunction() (Expr, error) {
-	tok := p.tokens[p.current-1] // Will always be a FUN token
+func (p *Parser) parseList() (Expr, error) {
+	lst := []Expr{}
 
-	err := p.consumeToken(LEFT_PAREN, "Expect '(' after 'fun'.")
+	for !p.peekIsOneOf(RIGHT_BRACKET, EOF) {
+		ele, err := p.parseLogicalOr()
+		if err != nil {
+			return nil, err
+		}
+
+		lst = append(lst, ele)
+
+		if p.peekToken().typ != RIGHT_BRACKET {
+			err := p.consumeToken(COMMA, "Expect ',' between list elements.")
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	err := p.consumeToken(RIGHT_BRACKET, "Expect ']' after list.")
 	if err != nil {
 		return nil, err
 	}
 
-	params, err := p.parseParameters()
-	if err != nil {
-		return nil, err
-	}
-
-	err = p.consumeToken(RIGHT_PAREN, "Expect ')' after parameters.")
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := p.parseBlock()
-	if err != nil {
-		return nil, err
-	}
-
-	return &FunExpr{tok, params, body}, nil
+	return &List{lst}, nil
 }
 
 // CHALLENGE 2: Add ternary operator
@@ -1026,3 +1059,31 @@ func (p *Parser) parseIfExpr() (Expr, error) {
 
 	return &IfExpr{tok, cond, thenExpr, elseExpr}, nil
 }
+
+// anonFunction ::= "fun" "(" parameters? ")" block
+func (p *Parser) parseAnonFunction() (Expr, error) {
+	tok := p.tokens[p.current-1] // Will always be a FUN token
+
+	err := p.consumeToken(LEFT_PAREN, "Expect '(' after 'fun'.")
+	if err != nil {
+		return nil, err
+	}
+
+	params, err := p.parseParameters()
+	if err != nil {
+		return nil, err
+	}
+
+	err = p.consumeToken(RIGHT_PAREN, "Expect ')' after parameters.")
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := p.parseBlock()
+	if err != nil {
+		return nil, err
+	}
+
+	return &FunExpr{tok, params, body}, nil
+}
+

@@ -286,6 +286,7 @@ func (t *Tokenizer) scanIdentifierOrKeyword() {
 	}
 
 	text := t.source[t.start:t.current]
+
 	typ, ok := keywords[text]
 	if !ok {
 		typ = IDENTIFIER

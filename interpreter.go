@@ -21,6 +21,7 @@ type Interpreter struct {
 func NewInterpreter() *Interpreter {
 	globals := NewEnvironment(nil)
 	globals.Set("clock", Clock{})
+	globals.Set("len", Len{})
 
 	return &Interpreter{globals, globals, make(map[Expr]int)}
 }
@@ -289,10 +290,16 @@ func (i *Interpreter) evaluate(expr Expr) (any, error) {
 		return i.evalCall(e)
 	case *IfExpr:
 		return i.evalIfExpr(e)
+	case *Index:
+		return i.evalIndex(e)
+	case *List:
+		return i.evalList(e)
 	case *Get:
 		return i.evalGet(e)
 	case *Set:
 		return i.evalSet(e)
+	case *SetIndex:
+		return i.evalSetIndex(e)
 	case *This:
 		return i.lookUpVariable(e.keyword, expr)
 	case *Grouping:
@@ -367,21 +374,13 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 		}
 
 		return -rhs, nil
-	// ++/--: Update the value of the variable, return the new value
-	case MINUS_MINUS:
-		// NOTE:
-		// Using expr.rhs here is a bit confusing
-		// NOT and MINUS need to evaluate rhs and check the type
-		// But the increment/decrement operators need to both
-		// Check that the rhs is a VARIABLE, AND THEN check
-		// if it evaluates to a number
+	default :// ++/--: Update the value of the variable, return the new value
 		switch e := expr.rhs.(type) {
 		case *Variable:
 			key := e.name.lexeme
-			_, ok := i.env.Get(key)
-			if !ok {
+			if _, ok := i.env.Get(key); !ok {
 				return nil, RuntimeError{e.name,
-					"Use of undeclared identifier '" + key + "'",
+					"Use of undeclared identifier '"+key+"'",
 				}
 			}
 
@@ -389,54 +388,56 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 			if !ok {
 				return nil, RuntimeError{
 					tok: expr.op,
-					msg: "'--' operand must be a number",
+					msg: "'"+expr.op.lexeme+"' operand must be a number",
 				}
 			}
 
-			i.env.SetInScope(key, val-1)
+			switch expr.op.typ {
+			case MINUS_MINUS:
+				val--
+				i.env.SetInScope(key, val)
+			case PLUS_PLUS:
+				val++
+				i.env.SetInScope(key, val)
+			default:
+				panic("Unreachable.")
+			}
 
-			return val - 1, nil
-		case *Get:
-			object, err := i.evaluate(e.object)
+			return val, nil
+		case *Index:
+			list, err := i.evaluate(e.list)
 			if err != nil {
 				return nil, err
 			}
 
-			if obj, ok := object.(Object); ok {
-				rhs, err := obj.Get(e.name)
-				if err != nil {
-					return nil, err
-				}
-
-				val, ok := rhs.(float64)
-				if !ok {
-					return nil, RuntimeError{
-						tok: expr.op,
-						msg: "'--' operand must be a number",
-					}
-				}
-
-				obj.Set(e.name, val-1)
-
-				return val - 1, nil
-			}
-
-			return nil, RuntimeError{expr.op,
-				"'--' target must be an object property"}
-		default:
-			return nil, RuntimeError{
-				tok: expr.op,
-				msg: "Expression is not assignable",
-			}
-		}
-	case PLUS_PLUS:
-		switch e := expr.rhs.(type) {
-		case *Variable:
-			key := e.name.lexeme
-			_, ok := i.env.Get(key)
+			lst, ok := list.([]any)
 			if !ok {
-				return nil, RuntimeError{e.name,
-					"Use of undeclared identifier '" + key + "'",
+				return nil, &RuntimeError{
+					e.bracket, 
+					"Subscripted value is not a list.",
+				}
+			}
+
+			index, err := i.evaluate(e.index)
+			if err != nil {
+				return nil, err
+			}
+
+			idx, ok := index.(float64)
+			if !ok {
+				return nil, &RuntimeError{
+					e.bracket,
+					"List subscript is not a number.",
+				}
+			}
+
+			if int(idx) >= len(lst) {
+				return nil, &RuntimeError{
+					e.bracket,
+					fmt.Sprintf(
+						"Index out of range [%v] with length %v.",
+						int(idx), len(lst),
+					),
 				}
 			}
 
@@ -444,13 +445,22 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 			if !ok {
 				return nil, RuntimeError{
 					tok: expr.op,
-					msg: "'++' operand must be a number",
+					msg: "'"+expr.op.lexeme+"' operand must be a number",
 				}
 			}
 
-			i.env.SetInScope(key, val+1)
+			switch expr.op.typ {
+			case MINUS_MINUS:
+				val--
+				lst[int(idx)] = val
+			case PLUS_PLUS:
+				val++
+				lst[int(idx)] = val
+			default:
+				panic("Unreachable.")
+			}
 
-			return val + 1, nil
+			return val, nil
 		case *Get:
 			object, err := i.evaluate(e.object)
 			if err != nil {
@@ -458,35 +468,38 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 			}
 
 			if obj, ok := object.(Object); ok {
-				rhs, err := obj.Get(e.name)
-				if err != nil {
-					return nil, err
-				}
-
 				val, ok := rhs.(float64)
 				if !ok {
 					return nil, RuntimeError{
 						tok: expr.op,
-						msg: "'++' operand must be a number",
+						msg: "'"+expr.op.lexeme+"' operand must be a number",
 					}
 				}
 
-				obj.Set(e.name, val+1)
+				switch expr.op.typ {
+				case MINUS_MINUS:
+					val--
+					obj.Set(e.name, val)
+				case PLUS_PLUS:
+					val++
+					obj.Set(e.name, val)
+				default:
+					panic("Unreachable.")
+				}
 
-				return val + 1, nil
+				return val, nil
 			}
 
-			return nil, RuntimeError{expr.op,
-				"'++' target must be an object property"}
+			return nil, RuntimeError{
+				tok: expr.op,
+				msg: "'"+expr.op.lexeme+"' target must be an object property",
+			}
 		default:
 			return nil, RuntimeError{
 				tok: expr.op,
 				msg: "Expression is not assignable",
 			}
 		}
-	default:
-		panic(fmt.Sprintf(
-			"Unreachable: unexpected unary operand: %v", expr.op))
 	}
 }
 
@@ -501,7 +514,7 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 		key := e.name.lexeme
 		if _, ok := i.env.Get(key); !ok {
 			return nil, RuntimeError{e.name,
-				"Use of undeclared identifier '" + key + "'",
+				"Use of undeclared identifier '"+key+"'",
 			}
 		}
 
@@ -509,7 +522,7 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 		if !ok {
 			return nil, RuntimeError{
 				tok: expr.op,
-				msg: "'" + expr.op.lexeme + "' operand must be a number",
+				msg: "'"+expr.op.lexeme+"' operand must be a number",
 			}
 		}
 
@@ -518,6 +531,61 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 			i.env.SetInScope(key, val-1)
 		case PLUS_PLUS:
 			i.env.SetInScope(key, val+1)
+		default:
+			panic("Unreachable.")
+		}
+
+		return val, nil
+	case *Index:
+		list, err := i.evaluate(e.list)
+		if err != nil {
+			return nil, err
+		}
+
+		lst, ok := list.([]any)
+		if !ok {
+			return nil, &RuntimeError{
+				e.bracket, 
+				"Subscripted value is not a list.",
+			}
+		}
+
+		index, err := i.evaluate(e.index)
+		if err != nil {
+			return nil, err
+		}
+
+		idx, ok := index.(float64)
+		if !ok {
+			return nil, &RuntimeError{
+				e.bracket,
+				"List subscript is not a number.",
+			}
+		}
+
+		if int(idx) >= len(lst) {
+			return nil, &RuntimeError{
+				e.bracket,
+				fmt.Sprintf(
+					"Index out of range [%v] with length %v.",
+					int(idx), len(lst),
+				),
+			}
+		}
+
+		val, ok := lst[int(idx)].(float64)
+		if !ok {
+			return nil, RuntimeError{
+				tok: expr.op,
+				msg: "'"+expr.op.lexeme+"' operand must be a number",			
+			}
+		}
+
+		switch expr.op.typ {
+		case MINUS_MINUS:
+			lst[int(idx)] = val-1
+		case PLUS_PLUS:
+			lst[int(idx)] = val+1
 		default:
 			panic("Unreachable.")
 		}
@@ -534,7 +602,7 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 			if !ok {
 				return nil, RuntimeError{
 					tok: expr.op,
-					msg: "'" + expr.op.lexeme + "' operand must be a number",
+					msg: "'"+expr.op.lexeme+"' operand must be a number",
 				}
 			}
 
@@ -550,8 +618,10 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 			return val, nil
 		}
 
-		return nil, RuntimeError{expr.op,
-			"'" + expr.op.lexeme + "' target must be an object property"}
+		return nil, RuntimeError{
+			tok: expr.op,
+			msg: "'"+expr.op.lexeme+"' target must be an object property",
+		}
 	default:
 		return nil, RuntimeError{
 			tok: expr.op,
@@ -621,9 +691,11 @@ func (i *Interpreter) evalCall(expr *CallExpr) (any, error) {
 		case bool:
 			errMsg = "Called object type 'bool' is not a function."
 		case float64:
-			errMsg = "Called object type 'float' is not a function."
+			errMsg = "Called object type 'number' is not a function."
 		case string:
 			errMsg = "Called object type 'string' is not a function."
+		case []any:
+			errMsg = "Called object type 'list' is not a function."
 		default:
 			panic("Unreachable.") // fallback in case I add more types later
 		}
@@ -866,6 +938,60 @@ func (i *Interpreter) evalIfExpr(expr *IfExpr) (any, error) {
 	}
 }
 
+func (i *Interpreter) evalIndex(expr *Index) (any, error) {
+	list, err := i.evaluate(expr.list)
+	if err != nil {
+		return nil, err
+	}
+
+	lst, ok := list.([]any)
+	if !ok {
+		return nil, &RuntimeError{
+			expr.bracket, 
+			"Subscripted value is not a list.",
+		}
+	}
+
+	index, err := i.evaluate(expr.index)
+	if err != nil {
+		return nil, err
+	}
+
+	idx, ok := index.(float64)
+	if !ok {
+		return nil, &RuntimeError{
+			expr.bracket,
+			"List subscript is not a number.",
+		}
+	}
+
+	if int(idx) >= len(lst) {
+		return nil, &RuntimeError{
+			expr.bracket,
+			fmt.Sprintf(
+				"Index out of range [%v] with length %v.",
+				int(idx), len(lst),
+			),
+		}
+	}
+
+	return lst[int(idx)], nil
+}
+
+func (i *Interpreter) evalList(expr *List) ([]any, error) {
+	lst := []any{}
+	for _, value := range expr.values {
+		val, err := i.evaluate(value)
+		if err != nil {
+			return nil, err
+		}
+
+		lst = append(lst, val)
+	}
+
+	return lst, nil
+}
+
 func (i *Interpreter) evalGet(expr *Get) (any, error) {
 	object, err := i.evaluate(expr.object)
 	if err != nil {
@@ -899,4 +1025,50 @@ func (i *Interpreter) evalSet(expr *Set) (any, error) {
 	}
 
 	return nil, RuntimeError{expr.name, "Only objects have fields."}
+}
+
+func (i *Interpreter) evalSetIndex(expr *SetIndex) (any, error) {
+	list, err := i.evaluate(expr.list)
+	if err != nil {
+		return nil, err
+	}
+
+	if lst, ok := list.([]any); ok {
+		index, err := i.evaluate(expr.index)
+		if err != nil {
+			return nil, err
+		}
+
+		idx, ok := index.(float64)
+		if !ok {
+			return nil, &RuntimeError{
+				expr.bracket,
+				"List subscript is not a number.",
+			}
+		}
+
+		if int(idx) >= len(lst) {
+			return nil, &RuntimeError{
+				expr.bracket,
+				fmt.Sprintf(
+					"Index out of range [%v] with length %v.",
+					int(idx), len(lst),
+				),
+			}
+		}
+
+		value, err := i.evaluate(expr.value)
+		if err != nil {
+			return nil, err
+		}
+
+		lst[int(idx)] = value
+
+		return value, nil
+	}
+
+	return nil, RuntimeError{
+		expr.bracket,
+		"Subscripted value is not a list.",
+	}
 }

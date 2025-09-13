@@ -1,0 +1,26 @@
+var x = 64;
+var y = "TBONE";
+
+var lst = [42, "Vlada", x, y];
+
+print len(lst); # built-in function, expect 4
+
+print "List contents:";
+for var i = 0; i < len(lst); i++ {
+    print lst[i];
+}
+print "";
+
+print lst; # Can also do this, prints [42, "Vlada", 64, "TBONE"]
+
+print "";
+
+lst[2]++;
+
+lst[3] = "PORTERHOUSE";
+
+print x; # Expect 64
+print y; # "TBONE"
+
+print lst[2]; # Expect 65
+print lst[3]; # "PORTERHOUSE"

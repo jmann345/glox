@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 func IsDigit(c byte) bool {
 	return c >= '0' && c <= '9'
@@ -20,8 +23,22 @@ func Stringify(value any) string {
 	switch v := value.(type) {
 	case nil:
 		return "nil"
-	case bool, float64, string:
+	case bool, int, float64, string:
 		return fmt.Sprintf("%v", v)
+	case []any:
+		var sb strings.Builder
+
+		sb.WriteByte('[')
+		for i, e := range v {
+			sb.WriteString(Stringify(e))
+			if i < len(v)-1 {
+				sb.WriteByte(',')
+				sb.WriteByte(' ')
+			}
+		}
+		sb.WriteByte(']')
+
+		return sb.String()
 	case fmt.Stringer:
 		return v.String()
 	default:

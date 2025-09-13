@@ -25,11 +25,18 @@ func parenthesize(name string, exprs ...Expr) string {
 	return sb.String()
 }
 
-type NoOpExpr struct{}
+func bracketize(exprs ...Expr) string {
+	var sb strings.Builder
 
-func (NoOpExpr) isExpr() {}
-func (n NoOpExpr) String() string {
-	return parenthesize("no-op")
+	sb.WriteByte('[')
+	for _, expr := range exprs {
+		sb.WriteByte(',')
+		sb.WriteByte(' ')
+		sb.WriteString(expr.String())
+	}
+	sb.WriteByte(']')
+
+	return sb.String()
 }
 
 type Assign struct {
@@ -67,6 +74,30 @@ func (c CallExpr) String() string {
 	)
 }
 
+type FunExpr struct {
+	token  Token
+	params []Token
+	body   Stmt // NOTE: always a block statement
+}
+
+func (FunExpr) isExpr() {}
+func (f FunExpr) String() string {
+	var sb strings.Builder
+
+	sb.WriteString("fun")
+
+	sb.WriteByte('(')
+	for i := range f.params {
+		sb.WriteString(f.params[i].lexeme)
+		if i < len(f.params)-1 {
+			sb.WriteByte(',')
+		}
+	}
+	sb.WriteByte(')')
+
+	return sb.String()
+}
+
 type Get struct {
 	object Expr
 	name   Token
@@ -90,6 +121,17 @@ func (i IfExpr) String() string {
 		"if "+i.condition.String(), i.thenBranch, i.elseBranch)
 }
 
+type Index struct {
+	list 	Expr
+	bracket Token
+	index 	Expr
+}
+
+func (Index) isExpr() {}
+func (i Index) String() string {
+	return parenthesize("index", i.list, i.index) 
+}
+
 type Grouping struct {
 	expression Expr
 }
@@ -97,6 +139,15 @@ type Grouping struct {
 func (Grouping) isExpr() {}
 func (g Grouping) String() string {
 	return parenthesize("group", g.expression)
+}
+
+type List struct {
+	values []Expr
+}
+
+func (List) isExpr() {}
+func (l List) String() string {
+	return bracketize(l.values...)
 }
 
 type Literal struct {
@@ -126,6 +177,14 @@ func (l Literal) String() string {
 	}
 }
 
+type NoOpExpr struct{}
+
+func (NoOpExpr) isExpr() {}
+func (n NoOpExpr) String() string {
+	return parenthesize("no-op")
+}
+
+
 type Set struct {
 	object Expr
 	name   Token
@@ -135,6 +194,18 @@ type Set struct {
 func (Set) isExpr() {}
 func (s Set) String() string {
 	return parenthesize(s.name.lexeme, s.object, s.value)
+}
+
+type SetIndex struct {
+	list 	Expr
+	bracket Token
+	index 	Expr
+	value 	Expr
+}
+
+func (SetIndex) isExpr() {}
+func (s SetIndex) String() string {
+	return parenthesize("set", s.list, s.index, s.value)
 }
 
 type This struct {
@@ -175,26 +246,3 @@ func (v Variable) String() string {
 	return parenthesize(v.name.lexeme)
 }
 
-type FunExpr struct {
-	token  Token
-	params []Token
-	body   Stmt // NOTE: always a block statement
-}
-
-func (FunExpr) isExpr() {}
-func (f FunExpr) String() string {
-	var sb strings.Builder
-
-	sb.WriteString("fun")
-
-	sb.WriteByte('(')
-	for i := range f.params {
-		sb.WriteString(f.params[i].lexeme)
-		if i < len(f.params)-1 {
-			sb.WriteByte(',')
-		}
-	}
-	sb.WriteByte(')')
-
-	return sb.String()
-}

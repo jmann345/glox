@@ -62,10 +62,13 @@ func NewResolver(interpreter *Interpreter) *Resolver {
 	}
 	globals := resolver.beginScope()
 
-	// Initialize our one built-in
+	// Initialize our one built-ins
 	// If this language was larger, this is where I'd set up the prelude
 	globals["clock"] = &VariableData{
-		Token{IDENTIFIER, "clock", nil, -1}, DEFINED,
+		Token{typ: IDENTIFIER, lexeme: "clock"}, DEFINED,
+	}
+	globals["len"] = &VariableData{
+		Token{typ: IDENTIFIER, lexeme: "len"}, DEFINED,
 	}
 
 	return resolver
@@ -221,7 +224,7 @@ func (r *Resolver) resClassStmt(stmt *ClassDecl) (err error) {
 
 	closure := r.beginScope()
 	closure["this"] = &VariableData{
-		Token{THIS, "this", nil, -1}, USED, // Allow "this" to be unused
+		Token{typ: THIS, lexeme: "this"}, USED, // Allow "this" to be unused
 	}
 	for _, meth := range stmt.methods {
 		method, ok := meth.(*FunDecl)
@@ -432,14 +435,20 @@ func (r *Resolver) resolveExpr(expr Expr) error {
 		return r.resGetExpr(e)
 	case *Grouping:
 		return r.resGroupingExpr(e)
+	case *Index:
+		return r.resIndexExpr(e)
 	case *IfExpr:
 		return r.resIfExpr(e)
+	case *List:
+		return r.resListExpr(e)
 	case *Literal, *NoOpExpr:
 		return nil
 	case *Postfix:
 		return r.resPostfixExpr(e)
 	case *Set:
 		return r.resSetExpr(e)
+	case *SetIndex:
+		return r.resSetIndexExpr(e)
 	case *This:
 		return r.resThisExpr(e)
 	case *Unary:
@@ -540,6 +549,14 @@ func (r *Resolver) resGroupingExpr(expr *Grouping) error {
 	return r.resolveExpr(expr.expression)
 }
 
+func (r *Resolver) resIndexExpr(expr *Index) error {
+	if err := r.resolveExpr(expr.list); err != nil {
+		return err
+	}
+
+	return r.resolveExpr(expr.index)
+}
+
 func (r *Resolver) resIfExpr(expr *IfExpr) error {
 	if err := r.resolveExpr(expr.condition); err != nil {
 		return err
@@ -558,6 +575,16 @@ func (r *Resolver) resIfExpr(expr *IfExpr) error {
 	return nil
 }
 
+func (r *Resolver) resListExpr(expr *List) error {
+	for _, value := range expr.values {
+		if err := r.resolveExpr(value); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (r *Resolver) resPostfixExpr(expr *Postfix) error {
 	return r.resolveExpr(expr.lhs)
 }
@@ -568,6 +595,22 @@ func (r *Resolver) resSetExpr(expr *Set) error {
 	}
 
 	if err := r.resolveExpr(expr.object); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Resolver) resSetIndexExpr(expr *SetIndex) error {
+	if err := r.resolveExpr(expr.list); err != nil {
+		return err
+	}
+
+	if err := r.resolveExpr(expr.index); err != nil {
+		return err
+	}
+
+	if err := r.resolveExpr(expr.value); err != nil {
 		return err
 	}
 

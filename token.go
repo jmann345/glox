@@ -23,7 +23,10 @@ const (
 	PLUS
 	SLASH
 	STAR
+
+	// Assignment
 	EQUAL
+	COLON_EQUAL // TODO: Add this for shorthand assignment
 
 	// PREFIX/POSTFIX MATH OPS (ADDED)
 	MINUS_MINUS
@@ -74,6 +77,7 @@ const (
 	IDENTIFIER
 	NUMBER
 	STRING
+	LIST
 
 	EOF
 )
@@ -84,6 +88,10 @@ func (t TokenType) String() string {
 		return "LEFT_PAREN"
 	case RIGHT_PAREN:
 		return "RIGHT_PAREN"
+	case LEFT_BRACKET:
+		return "LEFT_BRACKET"
+	case RIGHT_BRACKET:
+		return "RIGHT_BRACKET"
 	case LEFT_BRACE:
 		return "LEFT_BRACE"
 	case RIGHT_BRACE:
@@ -102,6 +110,14 @@ func (t TokenType) String() string {
 		return "SLASH"
 	case STAR:
 		return "STAR"
+	case MINUS_EQUAL:
+		return "MINUS_EQUAL"
+	case PLUS_EQUAL:
+		return "PLUS_EQUAL"
+	case SLASH_EQUAL:
+		return "SLASH_EQUAL"
+	case STAR_EQUAL:
+		return "STAR_EQUAL"
 	case EQUAL:
 		return "EQUAL"
 	case EQUAL_EQUAL:
@@ -177,13 +193,13 @@ func (t Token) String() string {
 func (t Token) UnderlyingOp() Token {
 	switch t.typ {
 	case MINUS_EQUAL:
-		t.typ = MINUS
+		t.typ, t.lexeme = MINUS, "-"
 	case PLUS_EQUAL:
-		t.typ = PLUS
+		t.typ, t.lexeme = PLUS, "+"
 	case SLASH_EQUAL:
-		t.typ = SLASH
+		t.typ, t.lexeme = SLASH, "/"
 	case STAR_EQUAL:
-		t.typ = STAR
+		t.typ, t.lexeme = STAR, "*"
 	default:
 		panic("Invalid token: " + t.String())
 	}
