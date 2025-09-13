@@ -10,6 +10,8 @@ const (
 	// Single character tokens
 	LEFT_PAREN TokenType = iota
 	RIGHT_PAREN
+	LEFT_BRACKET
+	RIGHT_BRACKET
 	LEFT_BRACE
 	RIGHT_BRACE
 	SEMICOLON
@@ -24,8 +26,13 @@ const (
 	EQUAL
 
 	// PREFIX/POSTFIX MATH OPS (ADDED)
-	PLUS_PLUS
 	MINUS_MINUS
+	PLUS_PLUS
+
+	MINUS_EQUAL
+	PLUS_EQUAL
+	SLASH_EQUAL
+	STAR_EQUAL
 
 	// Comparison operators
 	EQUAL_EQUAL
@@ -61,7 +68,7 @@ const (
 	// Variable declaration keyword
 	VAR
 	// Misc. keyword(s)
-	PRINT // I don't like this :/
+	PRINT
 
 	// Literals
 	IDENTIFIER
@@ -165,4 +172,21 @@ type Token struct {
 
 func (t Token) String() string {
 	return fmt.Sprintf("%s %s %v", t.typ, t.lexeme, t.literal)
+}
+
+func (t Token) UnderlyingOp() Token {
+	switch t.typ {
+	case MINUS_EQUAL:
+		t.typ = MINUS
+	case PLUS_EQUAL:
+		t.typ = PLUS
+	case SLASH_EQUAL:
+		t.typ = SLASH
+	case STAR_EQUAL:
+		t.typ = STAR
+	default:
+		panic("Invalid token: " + t.String())
+	}
+
+	return t
 }

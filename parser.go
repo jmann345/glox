@@ -118,6 +118,7 @@ func (p *Parser) parseDeclaration() (Stmt, error) {
 	return stmt, nil
 }
 
+// I have decided NOT to allor for inheritence.
 // classDecl ::= "class" IDENTIFIER "{" funDecl* "}"
 func (p *Parser) parseClassDecl() (Stmt, error) {
 	if err := p.consumeToken(CLASS, "Expect 'class'."); err != nil {
@@ -523,7 +524,10 @@ func (p *Parser) parseExpression() (Expr, error) {
 	return p.parseAssignment()
 }
 
-// assignment ::= ( call "." )? IDENTIFIER '=' assignment | comma
+// assignment ::=
+//     comma
+//     | ( call "." ) IDENTIFIER ( ( "=" assignment )
+//     						     | ( "-=" | "+=" | "/=" | "*=" ) expression )
 func (p *Parser) parseAssignment() (Expr, error) {
 	expr, err := p.parseComma()
 	if err != nil {
@@ -547,6 +551,29 @@ func (p *Parser) parseAssignment() (Expr, error) {
 		}
 
 		return nil, ParseError{tok, "Invalid assignment target."}
+	}
+
+	if op, ok := p.consumeOneOf(
+		MINUS_EQUAL, PLUS_EQUAL, SLASH_EQUAL, STAR_EQUAL,
+	); ok { // desugar lhs .= rhs into lhs = lhs . rhs
+		op = op.UnderlyingOp()
+
+		rhs, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+
+		if lhs, ok := expr.(*Variable); ok {
+			return &Assign{
+				lhs.name, &Binary{lhs, op, rhs},
+			}, nil
+		}
+
+		if lhs, ok := expr.(*Get); ok {
+			return &Set{
+				lhs.object, lhs.name, &Binary{lhs, op, rhs},
+			}, nil
+		}
 	}
 
 	return expr, nil

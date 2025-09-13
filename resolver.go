@@ -223,7 +223,6 @@ func (r *Resolver) resClassStmt(stmt *ClassDecl) (err error) {
 	closure["this"] = &VariableData{
 		Token{THIS, "this", nil, -1}, USED, // Allow "this" to be unused
 	}
-
 	for _, meth := range stmt.methods {
 		method, ok := meth.(*FunDecl)
 		if !ok {
@@ -242,8 +241,7 @@ func (r *Resolver) resClassStmt(stmt *ClassDecl) (err error) {
 			return
 		}
 	}
-
-	// pop closure so static methods can't access 'this' or 'super'
+	// pop closure so static methods can't access 'this'
 	r.endScope(&err)
 
 	r.beginScope() // static closure

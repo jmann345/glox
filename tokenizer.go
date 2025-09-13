@@ -70,6 +70,10 @@ func (t *Tokenizer) scanToken() error {
 		t.addToken(LEFT_PAREN, nil)
 	case ')':
 		t.addToken(RIGHT_PAREN, nil)
+	case '[':
+		t.addToken(LEFT_BRACKET, nil)
+	case ']':
+		t.addToken(RIGHT_BRACKET, nil)
 	case '{':
 		t.addToken(LEFT_BRACE, nil)
 	case '}':
@@ -78,24 +82,36 @@ func (t *Tokenizer) scanToken() error {
 		t.addToken(COMMA, nil)
 	case '.':
 		t.addToken(DOT, nil)
+	case ';':
+		t.addToken(SEMICOLON, nil)
 	case '-':
 		if t.match('-') {
 			t.addToken(MINUS_MINUS, nil)
+		} else if t.match('=') {
+			t.addToken(MINUS_EQUAL, nil)
 		} else {
 			t.addToken(MINUS, nil)
 		}
 	case '+':
 		if t.match('+') {
 			t.addToken(PLUS_PLUS, nil)
+		} else if t.match('=') {
+			t.addToken(PLUS_EQUAL, nil)
 		} else {
 			t.addToken(PLUS, nil)
 		}
-	case ';':
-		t.addToken(SEMICOLON, nil)
-	case '*':
-		t.addToken(STAR, nil)
 	case '/':
-		t.addToken(SLASH, nil)
+		if t.match('=') {
+			t.addToken(SLASH_EQUAL, nil)
+		} else {
+			t.addToken(SLASH, nil)
+		}
+	case '*':
+		if t.match('=') {
+			t.addToken(STAR_EQUAL, nil)
+		} else {
+			t.addToken(STAR, nil)
+		}
 	case '!':
 		if t.match('=') {
 			t.addToken(BANG_EQUAL, nil)
@@ -171,10 +187,12 @@ func (t *Tokenizer) match(expected byte) bool {
 	if t.current >= len(t.source) {
 		return false
 	}
+
 	actual := t.source[t.current]
 	if actual != expected {
 		return false
 	}
+
 	t.current++
 	return true
 }
