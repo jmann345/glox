@@ -122,14 +122,14 @@ func (i IfExpr) String() string {
 }
 
 type Index struct {
-	list 	Expr
+	list    Expr
 	bracket Token
-	index 	Expr
+	index   Expr
 }
 
 func (Index) isExpr() {}
 func (i Index) String() string {
-	return parenthesize("index", i.list, i.index) 
+	return parenthesize("index", i.list, i.index)
 }
 
 type Grouping struct {
@@ -184,7 +184,6 @@ func (n NoOpExpr) String() string {
 	return parenthesize("no-op")
 }
 
-
 type Set struct {
 	object Expr
 	name   Token
@@ -197,10 +196,10 @@ func (s Set) String() string {
 }
 
 type SetIndex struct {
-	list 	Expr
+	list    Expr
 	bracket Token
-	index 	Expr
-	value 	Expr
+	index   Expr
+	value   Expr
 }
 
 func (SetIndex) isExpr() {}
@@ -245,4 +244,3 @@ func (Variable) isExpr() {}
 func (v Variable) String() string {
 	return parenthesize(v.name.lexeme)
 }
-

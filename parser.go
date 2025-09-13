@@ -409,6 +409,7 @@ func (p *Parser) parseWhileStmt() (Stmt, error) {
 }
 
 // for ::= "for" ( varDecl | exprStmt | ";" )
+//
 //	             expression? ";"
 //	             expression?
 //				 block
@@ -524,8 +525,9 @@ func (p *Parser) parseExpression() (Expr, error) {
 }
 
 // assignment ::= comma
-//                | call ( ( "=" assignment ) 
-// 					     | ( ( "-=" | "+=" | "/=" | "*=" ) expression ) )
+//
+//	               | call ( ( "=" assignment )
+//						     | ( ( "-=" | "+=" | "/=" | "*=" ) expression ) )
 func (p *Parser) parseAssignment() (Expr, error) {
 	expr, err := p.parseComma()
 	if err != nil {
@@ -813,9 +815,9 @@ func (p *Parser) parseUnary() (Expr, error) {
 	return p.parsePostfix()
 }
 
-// postfix ::= index ( '--' | '++' )? 
+// postfix ::= suffix ( '--' | '++' )?
 func (p *Parser) parsePostfix() (Expr, error) {
-	expr, err := p.parseIndex()
+	expr, err := p.parseSuffix()
 	if err != nil {
 		return nil, err
 	}
@@ -827,34 +829,10 @@ func (p *Parser) parsePostfix() (Expr, error) {
 	return expr, nil
 }
 
-// index ::= call ( "[" logicalOr "]" )*
-func (p *Parser) parseIndex() (Expr, error) {
-	expr, err := p.parseCall()
-	if err != nil {
-		return nil, err
-	}
-
-	for p.peekToken().typ == LEFT_BRACKET {
-		op := p.peekAndConsume()
-
-		index, err := p.parseLogicalOr()
-		if err != nil {
-			return nil, err
-		}
-
-		err = p.consumeToken(RIGHT_BRACKET, "Expect ']' after index.")
-		if err != nil {
-			return nil, err
-		}
-
-		expr = &Index{expr, op, index}
-	}
-
-	return expr, nil
-}
-
-// call ::= primary ( "(" arguments? ")" | "." IDENTIFIER | )*
-func (p *Parser) parseCall() (Expr, error) {
+// suffix ::= primary (
+// 			      "(" arguments? ")" | "." IDENTIFIER | "[" logicalOr "]" 
+// 			  )*
+func (p *Parser) parseSuffix() (Expr, error) {
 	expr, err := p.parsePrimary()
 	if err != nil {
 		return nil, err
@@ -883,6 +861,18 @@ func (p *Parser) parseCall() (Expr, error) {
 			}
 
 			expr = &Get{expr, name}
+		case LEFT_BRACKET:
+			index, err := p.parseLogicalOr()
+			if err != nil {
+				return nil, err
+			}
+
+			err = p.consumeToken(RIGHT_BRACKET, "Expect ']' after index.")
+			if err != nil {
+				return nil, err
+			}
+
+			expr = &Index{expr, tok, index}
 		default:
 			p.current-- // puke the last token
 			repeat = false
@@ -1086,4 +1076,3 @@ func (p *Parser) parseAnonFunction() (Expr, error) {
 
 	return &FunExpr{tok, params, body}, nil
 }
-

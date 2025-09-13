@@ -22,6 +22,7 @@ func NewInterpreter() *Interpreter {
 	globals := NewEnvironment(nil)
 	globals.Set("clock", Clock{})
 	globals.Set("len", Len{})
+	globals.Set("append", Append{})
 
 	return &Interpreter{globals, globals, make(map[Expr]int)}
 }
@@ -374,13 +375,13 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 		}
 
 		return -rhs, nil
-	default :// ++/--: Update the value of the variable, return the new value
+	default: // ++/--: Update the value of the variable, return the new value
 		switch e := expr.rhs.(type) {
 		case *Variable:
 			key := e.name.lexeme
 			if _, ok := i.env.Get(key); !ok {
 				return nil, RuntimeError{e.name,
-					"Use of undeclared identifier '"+key+"'",
+					"Use of undeclared identifier '" + key + "'",
 				}
 			}
 
@@ -388,7 +389,7 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 			if !ok {
 				return nil, RuntimeError{
 					tok: expr.op,
-					msg: "'"+expr.op.lexeme+"' operand must be a number",
+					msg: "'" + expr.op.lexeme + "' operand must be a number",
 				}
 			}
 
@@ -413,7 +414,7 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 			lst, ok := list.([]any)
 			if !ok {
 				return nil, &RuntimeError{
-					e.bracket, 
+					e.bracket,
 					"Subscripted value is not a list.",
 				}
 			}
@@ -445,7 +446,7 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 			if !ok {
 				return nil, RuntimeError{
 					tok: expr.op,
-					msg: "'"+expr.op.lexeme+"' operand must be a number",
+					msg: "'" + expr.op.lexeme + "' operand must be a number",
 				}
 			}
 
@@ -471,8 +472,8 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 				val, ok := rhs.(float64)
 				if !ok {
 					return nil, RuntimeError{
-						tok: expr.op,
-						msg: "'"+expr.op.lexeme+"' operand must be a number",
+						expr.op,
+						"'" + expr.op.lexeme + "' operand must be a number",
 					}
 				}
 
@@ -492,7 +493,7 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 
 			return nil, RuntimeError{
 				tok: expr.op,
-				msg: "'"+expr.op.lexeme+"' target must be an object property",
+				msg: "'" + expr.op.lexeme + "' target must be an object property",
 			}
 		default:
 			return nil, RuntimeError{
@@ -514,7 +515,7 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 		key := e.name.lexeme
 		if _, ok := i.env.Get(key); !ok {
 			return nil, RuntimeError{e.name,
-				"Use of undeclared identifier '"+key+"'",
+				"Use of undeclared identifier '" + key + "'",
 			}
 		}
 
@@ -522,7 +523,7 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 		if !ok {
 			return nil, RuntimeError{
 				tok: expr.op,
-				msg: "'"+expr.op.lexeme+"' operand must be a number",
+				msg: "'" + expr.op.lexeme + "' operand must be a number",
 			}
 		}
 
@@ -545,7 +546,7 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 		lst, ok := list.([]any)
 		if !ok {
 			return nil, &RuntimeError{
-				e.bracket, 
+				e.bracket,
 				"Subscripted value is not a list.",
 			}
 		}
@@ -577,15 +578,15 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 		if !ok {
 			return nil, RuntimeError{
 				tok: expr.op,
-				msg: "'"+expr.op.lexeme+"' operand must be a number",			
+				msg: "'" + expr.op.lexeme + "' operand must be a number",
 			}
 		}
 
 		switch expr.op.typ {
 		case MINUS_MINUS:
-			lst[int(idx)] = val-1
+			lst[int(idx)] = val - 1
 		case PLUS_PLUS:
-			lst[int(idx)] = val+1
+			lst[int(idx)] = val + 1
 		default:
 			panic("Unreachable.")
 		}
@@ -602,7 +603,7 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 			if !ok {
 				return nil, RuntimeError{
 					tok: expr.op,
-					msg: "'"+expr.op.lexeme+"' operand must be a number",
+					msg: "'" + expr.op.lexeme + "' operand must be a number",
 				}
 			}
 
@@ -620,7 +621,7 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 
 		return nil, RuntimeError{
 			tok: expr.op,
-			msg: "'"+expr.op.lexeme+"' target must be an object property",
+			msg: "'" + expr.op.lexeme + "' target must be an object property",
 		}
 	default:
 		return nil, RuntimeError{
@@ -947,7 +948,7 @@ func (i *Interpreter) evalIndex(expr *Index) (any, error) {
 	lst, ok := list.([]any)
 	if !ok {
 		return nil, &RuntimeError{
-			expr.bracket, 
+			expr.bracket,
 			"Subscripted value is not a list.",
 		}
 	}

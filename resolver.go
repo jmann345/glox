@@ -70,6 +70,9 @@ func NewResolver(interpreter *Interpreter) *Resolver {
 	globals["len"] = &VariableData{
 		Token{typ: IDENTIFIER, lexeme: "len"}, DEFINED,
 	}
+	globals["append"] = &VariableData{
+		Token{typ: IDENTIFIER, lexeme: "append"}, DEFINED,
+	}
 
 	return resolver
 }

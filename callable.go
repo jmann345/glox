@@ -47,3 +47,27 @@ func (l Len) Arity() int {
 func (l Len) String() string {
 	return "<native fn>"
 }
+
+type Append struct{}
+
+func (a Append) Call(interpreter *Interpreter, arguments []any) any {
+	arg1, ok := arguments[0].([]any)
+	if !ok {
+		return RuntimeError{
+			tok: Token{typ: IDENTIFIER, lexeme: "append"},
+			msg: "First argument to append() must be a list.",
+		}
+	}
+
+	arg2 := arguments[1]
+
+	return append(arg1, arg2)
+}
+
+func (a Append) Arity() int {
+	return 2
+}
+
+func (a Append) String() string {
+	return "<native fn>"
+}

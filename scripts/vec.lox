@@ -2,5 +2,7 @@
 # Which adds functional features (map, filter, reduce etc.)
 
 class Vec {
-    # ...
+    init() {
+        this.lst = []
+    }
 }
