@@ -25,6 +25,7 @@ func (e *Environment) Get(key string) (any, bool) {
 func (e *Environment) GetAt(distance int, key string) any {
 	for range distance {
 		e = e.enclosing
+		if e == nil { panic("GetAt: bad distance for " + key) }
 	}
 
 	return e.values[key]
@@ -37,6 +38,7 @@ func (e *Environment) Set(key string, value any) {
 func (e *Environment) SetAt(distance int, key string, value any) {
 	for range distance {
 		e = e.enclosing
+		if e == nil { panic("SetAt: bad distance for " + key) }
 	}
 
 	e.values[key] = value

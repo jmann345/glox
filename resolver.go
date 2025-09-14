@@ -60,19 +60,6 @@ func NewResolver(interpreter *Interpreter) *Resolver {
 		currentClass:    NONE2,
 		loopDepth:       0,
 	}
-	globals := resolver.beginScope()
-
-	// Initialize our one built-ins
-	// If this language was larger, this is where I'd set up the prelude
-	globals["clock"] = &VariableData{
-		Token{typ: IDENTIFIER, lexeme: "clock"}, DEFINED,
-	}
-	globals["len"] = &VariableData{
-		Token{typ: IDENTIFIER, lexeme: "len"}, DEFINED,
-	}
-	globals["append"] = &VariableData{
-		Token{typ: IDENTIFIER, lexeme: "append"}, DEFINED,
-	}
 
 	return resolver
 }
@@ -95,8 +82,8 @@ func (r *Resolver) beginScope() map[string]*VariableData {
 }
 
 func (r *Resolver) endScope(err *error) {
-	if len(r.scopes) <= 1 { // never pop global scope
-		return
+	if r.scopes.Empty() {
+		panic("Unreachable")
 	}
 
 	scope := r.scopes.Pop()
@@ -140,7 +127,7 @@ func (r *Resolver) define(name Token, state VariableState) {
 	scope[name.lexeme].state = state
 }
 
-func (r *Resolver) resolveLocal(expr Expr, name Token, markUsed bool) error {
+func (r *Resolver) resolveLocal(expr Expr, name Token, markUsed bool) {
 	for i := len(r.scopes) - 1; i >= 0; i-- {
 		if variable, ok := r.scopes[i][name.lexeme]; ok {
 			r.interpreter.Resolve(expr, len(r.scopes)-i-1)
@@ -149,12 +136,8 @@ func (r *Resolver) resolveLocal(expr Expr, name Token, markUsed bool) error {
 				variable.state = USED
 			}
 
-			return nil
+			return
 		}
-	}
-
-	return ResolverError{name,
-		"Undefined Variable '" + name.lexeme + "'.",
 	}
 }
 
@@ -223,7 +206,7 @@ func (r *Resolver) resClassStmt(stmt *ClassDecl) (err error) {
 	if err = r.declare(stmt.name); err != nil {
 		return
 	}
-	r.define(stmt.name, USED)
+	r.define(stmt.name, DEFINED)
 
 	closure := r.beginScope()
 	closure["this"] = &VariableData{
@@ -249,9 +232,6 @@ func (r *Resolver) resClassStmt(stmt *ClassDecl) (err error) {
 	}
 	// pop closure so static methods can't access 'this'
 	r.endScope(&err)
-
-	r.beginScope() // static closure
-	defer r.endScope(&err)
 
 	for _, meth := range stmt.staticMethods {
 		method, ok := meth.(*FunDecl)
@@ -282,10 +262,12 @@ func (r *Resolver) resExprStmt(stmt *ExprStmt) error {
 func (r *Resolver) resFunctionStmt(
 	stmt *FunDecl, funTyp FunctionType,
 ) (err error) {
-	if err = r.declare(stmt.name); err != nil {
-		return
+	if funTyp == FUNCTION {
+		if err = r.declare(stmt.name); err != nil {
+			return
+		}
+		r.define(stmt.name, USED)
 	}
-	r.define(stmt.name, USED)
 
 	enclosingFunction := r.currentFunction
 	enclosingLoop := r.loopDepth
@@ -312,6 +294,8 @@ func (r *Resolver) resFunctionStmt(
 	if !ok {
 		panic("Unreachable.")
 	}
+
+	// We don't resolve the block stmt directly to avoid creating a new scope
 	for _, s := range body.stmts {
 		if err = r.resolveStmt(s); err != nil {
 			return
@@ -473,7 +457,8 @@ func (r *Resolver) resVarExpr(expr *Variable) error {
 		}
 	}
 
-	return r.resolveLocal(expr, expr.name, true)
+	r.resolveLocal(expr, expr.name, true)
+	return nil
 }
 
 func (r *Resolver) resAssignExpr(expr *Assign) error {
@@ -481,7 +466,8 @@ func (r *Resolver) resAssignExpr(expr *Assign) error {
 		return err
 	}
 
-	return r.resolveLocal(expr, expr.name, false)
+	r.resolveLocal(expr, expr.name, false)
+	return nil
 }
 
 func (r *Resolver) resBinaryExpr(expr *Binary) error {
@@ -627,7 +613,8 @@ func (r *Resolver) resThisExpr(expr *This) error {
 		}
 	}
 
-	return r.resolveLocal(expr, expr.keyword, true)
+	r.resolveLocal(expr, expr.keyword, true)
+	return nil
 }
 
 func (r *Resolver) resUnaryExpr(expr *Unary) error {

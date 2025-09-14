@@ -24,21 +24,31 @@ func (e LoxError) Error() string {
 }
 
 func main() {
-	numArgs := len(os.Args)
-
-	if numArgs > 2 {
-		fmt.Println("Usage: glox <script>")
-		os.Exit(64)
-	} else if numArgs == 2 {
-		if err := runFile(os.Args[1]); err != nil {
+	switch {
+	case len(os.Args) == 1:
+		if err := runPrompt(); err != nil {
 			log.Fatal(err)
 		}
-	} else if err := runPrompt(); err != nil {
-		log.Fatal(err)
+	case len(os.Args) == 2:
+		if err := runFile(os.Args[1], false); err != nil {
+			log.Fatal(err)
+		}
+	case len(os.Args) == 3:
+		if os.Args[1] == "--import" {
+			if err := runFile(os.Args[2], true); err != nil {
+				log.Fatal(err)
+			}
+		} else {
+			fmt.Println("Usage: glox [--import <script>] | <script>")
+			os.Exit(64)
+		}
+	default:
+		fmt.Println("Usage: glox [--import <script>] | <script>")
+		os.Exit(64)
 	}
 }
 
-func runFile(path string) error {
+func runFile(path string, shell bool) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -53,6 +63,24 @@ func runFile(path string) error {
 	resolver := NewResolver(interpreter)
 
 	run(string(buff), resolver)
+
+	if shell {
+		reader := bufio.NewReader(os.Stdin)
+		for i := 1; ; i++ {
+			fmt.Print("[" + strconv.Itoa(i) + "] ")
+
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				return err
+			}
+
+			if strings.TrimSpace(line) == "" {
+				break
+			}
+
+			run(line, resolver)
+		}
+	}
 
 	return nil
 }

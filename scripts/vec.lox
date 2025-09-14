@@ -3,6 +3,245 @@
 
 class Vec {
     init() {
-        this.lst = []
+        this.lst = [];
+    }
+
+    class from(lst) {
+        var vec = Vec();
+
+        for var i = 0; i < len(lst); i++ {
+            vec.push(lst[i]);
+        }
+
+        return vec;
+    }
+
+    # Query methods:
+    get(i) {
+        return this.lst[i];
+    }
+
+    len() {
+        return len(this.lst);
+    }
+
+    empty() {
+        return this.len() == 0;
+    }
+
+    toList() {
+        return this.lst;
+    }
+
+    first() {
+        if this.len() == 0 {
+            return nil;
+        }
+
+        return this.get(0);
+    }
+
+    last() {
+        if this.len() == 0 {
+            return nil;
+        }
+
+        return this.get(this.len() - 1);
+    }
+
+    contains(x) {
+        for var i = 0; i < this.len(); i++ {
+            if this.get(i) == x {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    indexOf(x) {
+        for var i = 0; i < this.len(); i++ {
+            if this.get(i) == x {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    lastIndexOf(x) {
+        for var i = this.len() - 1; i >= 0; i-- {
+            if this.get(i) == x {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    copy() {
+        var out = Vec();
+
+        for var i = 0; i < this.len(); i++ {
+            out.push(this.get(i));
+        }
+
+        return out;
+    }
+
+    map(fn) {
+        var out = Vec();
+
+        for var i = 0; i < this.len(); i++ {
+            var x = this.lst[i];
+            out.push(fn(x));
+        }
+
+        return out;
+    }
+
+
+    filter(fn) {
+        var out = Vec();
+
+        for var i = 0; i < len(this.lst); i++ {
+            var x = this.lst[i];
+            if fn(x) {
+                out.push(x);
+            }
+        }
+
+        return out;
+    }
+
+    # reduce(fn, init) where fn(acc, x) -> acc
+    reduce(fn, init) {
+        var acc = init;
+        for var i = 0; i < len(this.lst); i++ {
+            acc = fn(acc, this.lst[i]);
+        }
+        return acc;
+    }
+
+    forEach(fn) {
+        for var i = 0; i < len(this.lst); i++ {
+            fn(this.lst[i]);
+        }
+        return this;
+    }
+
+    some(pred) {
+        for var i = 0; i < len(this.lst); i++ {
+            if pred(this.lst[i]) { return true; }
+        }
+        return false;
+    }
+
+    every(pred) {
+        for var i = 0; i < len(this.lst); i++ {
+            if not pred(this.lst[i]) { return false; }
+        }
+        return true;
+    }
+
+    find(pred) {
+        for var i = 0; i < len(this.lst); i++ {
+            var x = this.lst[i];
+            if pred(x) { return x; }
+        }
+        return nil;
+    }
+
+    reverse() {
+        var out = [];
+        for var i = len(this.lst) - 1; i >= 0; i-- {
+            out = append(out, this.lst[i]);
+        }
+        return Vec.from(out);
+    }
+
+    pprint() {
+        print this.lst;
+    }
+
+    # Mutation methods
+    set(i, x) {
+        this.lst[i] = x;
+    }
+
+    push(x) {
+        this.lst = append(this.lst, x);
+    }
+
+    append(xs) {
+        if type(xs) == "list" {
+            for var i = 0; i < len(xs); i++ {
+                this.push(xs[i]);
+            }
+        } else if type(xs) == "Vec" {
+            for var i = 0; i < xs.len(); i++ {
+                this.push(xs.get(i));
+            }
+        } else {
+            print "Invalid type: " + type(xs);
+            print "Did you mean to call push()?";
+        }
     }
 }
+
+var vec = Vec.from([1, 4, 9, 16]);
+
+print "Expected: [1, 4, 9, 16]";
+print vec.lst;
+
+print "Expected: [2, 8, 18, 32]";
+var mapped = vec.map(fun(x) { return x * 2; });
+print mapped.lst;
+
+print "Expected: [9, 16]";
+var filtered = vec.filter(fun(x) { return x > 5; });
+print filtered.lst;
+
+print "Expected: 30";
+var reduced = vec.reduce(fun(acc, x) { return acc + x; }, 0);
+print reduced;
+
+print "Expected: true";
+print vec.contains(9);
+
+print "Expected: false";
+print vec.contains(3);
+
+print "Expected: 2";
+print vec.indexOf(9);
+
+print "Expected: 3";
+print vec.lastIndexOf(16);
+
+print "Expected: [16, 9, 4, 1]";
+var reversed = vec.reverse();
+print reversed.lst;
+
+print "Expected: [1, 4, 9, 16, 25]";
+var vec2 = vec.copy();
+vec2.push(25);
+print vec2.lst;
+
+print "Expected: 1";
+var first = vec.first();
+print first;
+
+print "Expected: 16";
+var last = vec.last();
+print last;
+
+print "Expected: true";
+print vec.some(fun(x) { return x == 9; });
+
+print "Expected: false";
+print vec.every(fun(x) { return x < 10; });
+
+print "Expected: [16, 81, 256]";
+vec.map(fun(x) { return x * x; })
+   .filter(fun(x) { return x > 5 and x < 1024; })
+   .pprint();

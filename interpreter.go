@@ -23,6 +23,7 @@ func NewInterpreter() *Interpreter {
 	globals.Set("clock", Clock{})
 	globals.Set("len", Len{})
 	globals.Set("append", Append{})
+	globals.Set("type", Type{})
 
 	return &Interpreter{globals, globals, make(map[Expr]int)}
 }

@@ -830,8 +830,9 @@ func (p *Parser) parsePostfix() (Expr, error) {
 }
 
 // suffix ::= primary (
-// 			      "(" arguments? ")" | "." IDENTIFIER | "[" logicalOr "]" 
-// 			  )*
+//
+//	    "(" arguments? ")" | "." IDENTIFIER | "[" logicalOr "]"
+//	)*
 func (p *Parser) parseSuffix() (Expr, error) {
 	expr, err := p.parsePrimary()
 	if err != nil {

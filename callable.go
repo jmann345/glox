@@ -28,7 +28,7 @@ func (c Clock) String() string {
 
 type Len struct{}
 
-func (l Len) Call(interpreter *Interpreter, arguments []any) any {
+func (l Len) Call(_ *Interpreter, arguments []any) any {
 	arg, ok := arguments[0].([]any)
 	if !ok {
 		return RuntimeError{
@@ -50,7 +50,7 @@ func (l Len) String() string {
 
 type Append struct{}
 
-func (a Append) Call(interpreter *Interpreter, arguments []any) any {
+func (a Append) Call(_ *Interpreter, arguments []any) any {
 	arg1, ok := arguments[0].([]any)
 	if !ok {
 		return RuntimeError{
@@ -69,5 +69,37 @@ func (a Append) Arity() int {
 }
 
 func (a Append) String() string {
+	return "<native fn>"
+}
+
+type Type struct{}
+
+func (t Type) Call(_ *Interpreter, arguments []any) any {
+	obj := arguments[0]
+	switch o := obj.(type) {
+	case nil:
+		return nil
+	case bool:
+		return "boolean"
+	case float64:
+		return "number"
+	case string:
+		return "string"
+	case []any:
+		return "list"
+	case *Instance:
+		return o.class.Name
+	case *Class:
+		return "type"
+	default:
+		panic("Unreachable.")
+	}
+}
+
+func (t Type) Arity() int {
+	return 1
+}
+
+func (t Type) String() string {
 	return "<native fn>"
 }
