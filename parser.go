@@ -500,7 +500,7 @@ func (p *Parser) parseReturnStmt() (Stmt, error) {
 		return nil, err
 	}
 
-	keyword := p.tokens[p.current-1]
+	tok := p.tokens[p.current-1]
 	var value Expr = nil
 
 	if p.peekToken().typ != SEMICOLON {
@@ -516,7 +516,7 @@ func (p *Parser) parseReturnStmt() (Stmt, error) {
 		return nil, err
 	}
 
-	return &ReturnStmt{keyword, value}, nil
+	return &ReturnStmt{tok, value}, nil
 }
 
 // expression ::= assignment
@@ -526,8 +526,8 @@ func (p *Parser) parseExpression() (Expr, error) {
 
 // assignment ::= comma
 //
-//	               | call ( ( "=" assignment )
-//						     | ( ( "-=" | "+=" | "/=" | "*=" ) expression ) )
+//	              | call ( ( "=" assignment )
+//						 | ( ( "-=" | "+=" | "/=" | "*=" ) expression ) )
 func (p *Parser) parseAssignment() (Expr, error) {
 	expr, err := p.parseComma()
 	if err != nil {
@@ -829,10 +829,10 @@ func (p *Parser) parsePostfix() (Expr, error) {
 	return expr, nil
 }
 
-// suffix ::= primary (
+// suffix ::= primary ( "(" arguments? ")"
 //
-//	    "(" arguments? ")" | "." IDENTIFIER | "[" logicalOr "]"
-//	)*
+//	                   | "." IDENTIFIER
+//						  | "[" logicalOr "]" )*
 func (p *Parser) parseSuffix() (Expr, error) {
 	expr, err := p.parsePrimary()
 	if err != nil {
@@ -908,9 +908,9 @@ func (p *Parser) parseArguments() ([]Expr, error) {
 		}
 
 		if p.peekToken().typ != RIGHT_PAREN {
-			err = p.consumeToken(COMMA,
-				"Expect ',' between function arguments.")
-			if err != nil {
+			if err = p.consumeToken(
+				COMMA, "Expect ',' between function arguments.",
+			); err != nil {
 				return nil, err
 			}
 		}

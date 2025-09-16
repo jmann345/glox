@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -91,6 +92,33 @@ func (t Type) Call(_ *Interpreter, arguments []any) any {
 		return o.class.Name
 	case *Class:
 		return "type"
+	case *Function, *AnonFunction: // TODO: Make this work with builtins and methods
+		var params []Token
+		if fn, ok := o.(*Function); ok {
+			params = fn.decl.params
+		}
+		if fn, ok := o.(*AnonFunction); ok {
+			params = fn.expr.params
+		}
+
+		var sb strings.Builder
+		sb.WriteString("fun")
+		sb.WriteByte('(')
+		for i, param := range params {
+			sb.WriteString(param.lexeme)
+			if i < len(params)-1 {
+				sb.WriteString(", ")
+			}
+		}
+		sb.WriteByte(')')
+
+		return sb.String()
+	case Clock:
+		return "fun()"
+	case Len:
+		return "fun(lst)"
+	case Type:
+		return "fun(obj)"
 	default:
 		panic("Unreachable.")
 	}

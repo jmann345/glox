@@ -33,39 +33,38 @@ func (i *Interpreter) Resolve(expr Expr, depth int) {
 }
 
 func (i *Interpreter) Interpret(stmt Stmt) error {
-	_, err := i.execute(stmt)
-	return err
+	return i.execute(stmt)
 }
 
-func (i *Interpreter) execute(stmt Stmt) (any, error) {
+func (i *Interpreter) execute(stmt Stmt) error {
 	switch s := stmt.(type) {
 	case *VarDecl:
 		val, err := i.evaluate(s.initializer)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		i.env.Set(s.name.lexeme, val)
 
-		return nil, nil
+		return nil
 	case *ExprStmt:
 		_, err := i.evaluate(s.expr)
-		return nil, err
+		return err
 	case *PrintStmt:
 		value, err := i.evaluate(s.expr)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		fmt.Println(Stringify(value))
 
-		return nil, nil
+		return nil
 	case *FunDecl:
 		i.env.Set(s.name.lexeme, &Function{
 			decl: s, closure: i.env, isInitializer: false,
 		})
 
-		return nil, nil
+		return nil
 	case *ClassDecl:
 		i.env.Set(s.name.lexeme, nil)
 
@@ -100,23 +99,23 @@ func (i *Interpreter) execute(stmt Stmt) (any, error) {
 		class := &Class{s.name.lexeme, methods, staticMethods}
 		i.env.SetInScope(s.name.lexeme, class)
 
-		return nil, nil
+		return nil
 	case *Block:
-		return nil, i.execBlock(s, NewEnvironment(i.env))
+		return i.execBlock(s, NewEnvironment(i.env))
 	case *IfStmt:
-		return nil, i.execIfStmt(s)
+		return i.execIfStmt(s)
 	case *WhileStmt:
-		return nil, i.execWhileStmt(s)
+		return i.execWhileStmt(s)
 	case *ForStmt:
-		return nil, i.execForStmt(s)
+		return i.execForStmt(s)
 	case *BreakStmt:
-		return nil, Break{}
+		return Break{}
 	case *CycleStmt:
-		return nil, Cycle{}
+		return Cycle{}
 	case *ReturnStmt:
-		return nil, i.execReturnStmt(s)
+		return i.execReturnStmt(s)
 	case *NoOpStmt: // no-op
-		return nil, nil
+		return nil
 	default:
 		panic(fmt.Sprintf("Unimplemented Statement type: %T", s))
 	}
@@ -129,7 +128,7 @@ func (i *Interpreter) execBlock(block *Block, env *Environment) error {
 	defer func() { i.env = prevEnv }() // ensure restoration even on error
 
 	for _, stmt := range block.stmts {
-		if _, err := i.execute(stmt); err != nil {
+		if err := i.execute(stmt); err != nil {
 			return err
 		}
 	}
@@ -152,12 +151,12 @@ func (i *Interpreter) execIfStmt(stmt *IfStmt) error {
 	}
 
 	if condValBool {
-		_, err := i.execute(stmt.thenBranch)
+		err := i.execute(stmt.thenBranch)
 		return err
 	}
 
 	if stmt.elseBranch != nil {
-		_, err := i.execute(stmt.elseBranch)
+		err := i.execute(stmt.elseBranch)
 		return err
 	}
 
@@ -180,7 +179,7 @@ func (i *Interpreter) execWhileStmt(stmt *WhileStmt) error {
 
 whileLoop:
 	for condValBool {
-		if _, err = i.execute(stmt.body); err != nil {
+		if err = i.execute(stmt.body); err != nil {
 			switch err.(type) {
 			case Break:
 				break whileLoop
@@ -215,7 +214,7 @@ func (i *Interpreter) execForStmt(stmt *ForStmt) error {
 	i.env = NewEnvironment(prevEnv)
 	defer func() { i.env = prevEnv }()
 
-	if _, err := i.execute(stmt.initializer); err != nil {
+	if err := i.execute(stmt.initializer); err != nil {
 		return err
 	}
 
@@ -240,7 +239,7 @@ forLoop:
 			}
 		}
 
-		if _, err = i.execute(stmt.body); err != nil {
+		if err = i.execute(stmt.body); err != nil {
 			switch err.(type) {
 			case Break:
 				break forLoop
@@ -353,8 +352,8 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Difference: I chose to only make 'false' falsey
-	// The book makes 'nil' falsely, but I don't like that
+
+	// NOTE: I chose to only make 'false' falsey
 	switch expr.op.typ {
 	case NOT:
 		rhs, ok := rhs.(bool)
@@ -691,7 +690,7 @@ func (i *Interpreter) evalCall(expr *CallExpr) (any, error) {
 		case nil:
 			errMsg = "Called object type 'nil' is not a function."
 		case bool:
-			errMsg = "Called object type 'bool' is not a function."
+			errMsg = "Called object type 'boolean' is not a function."
 		case float64:
 			errMsg = "Called object type 'number' is not a function."
 		case string:
@@ -867,11 +866,6 @@ func (i *Interpreter) evalMath(expr *Binary) (any, error) {
 	case STAR:
 		return lhs_n * rhs_n, nil
 	case SLASH:
-		// NOTE: golang behavior:
-		// 0/0 == NaN
-		// 1/0 == +Inf
-		// -1/0 == -Inf
-		// I'm fine with this for now!
 		return lhs_n / rhs_n, nil
 	}
 

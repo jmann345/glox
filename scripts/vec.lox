@@ -93,7 +93,7 @@ class Vec {
         var out = Vec();
 
         for var i = 0; i < this.len(); i++ {
-            var x = this.lst[i];
+            var x = this.get(i);
             out.push(fn(x));
         }
 
@@ -103,50 +103,48 @@ class Vec {
 
     filter(fn) {
         var out = Vec();
-
-        for var i = 0; i < len(this.lst); i++ {
-            var x = this.lst[i];
+        for var i = 0; i < this.len(); i++ {
+            var x = this.get(i);
             if fn(x) {
                 out.push(x);
             }
         }
-
         return out;
     }
 
     # reduce(fn, init) where fn(acc, x) -> acc
     reduce(fn, init) {
         var acc = init;
-        for var i = 0; i < len(this.lst); i++ {
-            acc = fn(acc, this.lst[i]);
+        for var i = 0; i < this.len(); i++ {
+            acc = fn(acc, this.get(i));
         }
         return acc;
     }
 
     forEach(fn) {
-        for var i = 0; i < len(this.lst); i++ {
+        for var i = 0; i < this.len(); i++ {
             fn(this.lst[i]);
         }
         return this;
     }
 
     some(pred) {
-        for var i = 0; i < len(this.lst); i++ {
-            if pred(this.lst[i]) { return true; }
+        for var i = 0; i < this.len(); i++ {
+            if pred(this.get(i)) { return true; }
         }
         return false;
     }
 
     every(pred) {
-        for var i = 0; i < len(this.lst); i++ {
-            if not pred(this.lst[i]) { return false; }
+        for var i = 0; i < this.len(); i++ {
+            if not pred(this.get(i)) { return false; }
         }
         return true;
     }
 
     find(pred) {
-        for var i = 0; i < len(this.lst); i++ {
-            var x = this.lst[i];
+        for var i = 0; i < this.len(); i++ {
+            var x = this.get(i);
             if pred(x) { return x; }
         }
         return nil;
@@ -154,8 +152,8 @@ class Vec {
 
     reverse() {
         var out = [];
-        for var i = len(this.lst) - 1; i >= 0; i-- {
-            out = append(out, this.lst[i]);
+        for var i = this.len() - 1; i >= 0; i-- {
+            out = append(out, this.get(i));
         }
         return Vec.from(out);
     }
