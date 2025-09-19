@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"slices"
 )
 
@@ -27,7 +28,7 @@ func (p *Parser) IsAtEnd() bool {
 }
 
 // program ::= declaration* EOF
-func (p *Parser) Parse() (Stmt, error) {
+func (p *Parser) Parse() Stmt {
 	return p.parseDeclaration()
 }
 
@@ -55,13 +56,24 @@ func (p *Parser) peekAndConsume() Token {
 	return tok
 }
 
-func (p *Parser) consumeToken(typ TokenType, message string) error {
+func (p *Parser) consumeToken(typ TokenType, message string) Token {
 	tok := p.peekToken()
 	if tok.typ == typ {
 		p.current++
-		return nil
+	} else {
+		panic(ParseError{tok, message})
 	}
-	return ParseError{tok, message}
+
+	return tok
+}
+
+func (p *Parser) tryConsume(typ TokenType) bool {
+	if p.peekToken().typ == typ {
+		p.current++
+		return true
+	} 
+
+	return false
 }
 
 func (p *Parser) consumeOneOf(types ...TokenType) (Token, bool) {
@@ -91,63 +103,55 @@ func (p *Parser) synchronize() {
 }
 
 // declaration ::= classDecl | funDecl | varDecl | statement
-func (p *Parser) parseDeclaration() (Stmt, error) {
-	var stmt Stmt
-	var err error
+func (p *Parser) parseDeclaration() (stmt Stmt) {
+    defer func() {
+        if r := recover(); r != nil {
+            if err, ok := r.(ParseError); ok {
+				fmt.Fprintln(os.Stderr, "Parser:", err)
+                p.synchronize()
+				stmt = &NoOpStmt{}
+            } else {
+                panic(r) // real panic, let it crash
+            }
+        }
+    }()
+
 	switch p.peekToken().typ {
 	case CLASS:
-		stmt, err = p.parseClassDecl()
+		stmt = p.parseClassDecl()
 	case VAR:
-		stmt, err = p.parseVarDecl()
+		stmt = p.parseVarDecl()
 	case FUN:
 		// Check next token so we don't parse anonymous functions here
 		if p.peekNextToken().typ != LEFT_PAREN {
-			stmt, err = p.parseFunDecl("function")
+			stmt = p.parseFunDecl("function")
 			break // so we don't fallthrough to default
 		}
 		fallthrough
 	default:
-		stmt, err = p.parseStatement()
+		stmt = p.parseStatement()
 	}
 
-	if err != nil {
-		p.synchronize()
-		return nil, err
-	}
-
-	return stmt, nil
+	return
 }
 
-// I have decided NOT to allor for inheritence.
 // classDecl ::= "class" IDENTIFIER "{" funDecl* "}"
-func (p *Parser) parseClassDecl() (Stmt, error) {
-	if err := p.consumeToken(CLASS, "Expect 'class'."); err != nil {
-		return nil, err
-	}
+func (p *Parser) parseClassDecl() Stmt {
+	p.consumeToken(CLASS, "Expect 'class'.")
 
-	name := p.peekToken()
-	if err := p.consumeToken(IDENTIFIER, "Expect class name."); err != nil {
-		return nil, err
-	}
+	name := p.consumeToken(IDENTIFIER, "Expect class name.")
 
-	err := p.consumeToken(LEFT_BRACE, "Expect '{' before class body.")
-	if err != nil {
-		return nil, err
-	}
+	p.consumeToken(LEFT_BRACE, "Expect '{' before class body.")
 
 	methods := []Stmt{}
 	staticMethods := []Stmt{}
 	for !p.peekIsOneOf(RIGHT_BRACE, EOF) {
 		static := false
-		if p.peekToken().typ == CLASS {
-			p.current++ // consume "class"
+		if p.tryConsume(CLASS) {
 			static = true
 		}
 
-		method, err := p.parseFunDecl("method")
-		if err != nil {
-			return nil, err
-		}
+		method := p.parseFunDecl("method")
 
 		if static {
 			staticMethods = append(staticMethods, method)
@@ -156,25 +160,16 @@ func (p *Parser) parseClassDecl() (Stmt, error) {
 		}
 	}
 
-	err = p.consumeToken(RIGHT_BRACE, "Expect '}' after class body.")
-	if err != nil {
-		return nil, err
-	}
+	p.consumeToken(RIGHT_BRACE, "Expect '}' after class body.")
 
-	return &ClassDecl{name, methods, staticMethods}, nil
+	return &ClassDecl{name, methods, staticMethods}
 }
 
 // varDecl ::= "var" IDENTIFIER ( "=" expression )? ";"
-func (p *Parser) parseVarDecl() (Stmt, error) {
-	err := p.consumeToken(VAR, "Expect identifier 'var'.")
-	if err != nil {
-		return nil, err
-	}
+func (p *Parser) parseVarDecl() Stmt {
+	p.consumeToken(VAR, "Expect identifier 'var'.")
 
-	name := p.peekToken()
-	if err = p.consumeToken(IDENTIFIER, "Invalid Identifier."); err != nil {
-		return nil, err
-	}
+	name := p.consumeToken(IDENTIFIER, "Invalid Identifier.")
 
 	// TODO: Create a separate keyword for undefined
 	// e.g.:
@@ -187,87 +182,57 @@ func (p *Parser) parseVarDecl() (Stmt, error) {
 	if p.peekToken().typ == EQUAL {
 		p.current++ // consume '='
 
-		initializer, err = p.parseExpression()
-		if err != nil {
-			return nil, err
-		}
+		initializer = p.parseExpression()
 	}
 
-	err = p.consumeToken(SEMICOLON, "Expect ';' after variable declaration.")
-	if err != nil {
-		return nil, err
-	}
+	p.consumeToken(SEMICOLON, "Expect ';' after variable declaration.")
 
-	return &VarDecl{name, initializer}, nil
+	return &VarDecl{name, initializer}
 }
 
 // funDecl ::= "fun" IDENTIFIER "(" parameters? ")" block
-func (p *Parser) parseFunDecl(funTypStr string) (Stmt, error) {
+func (p *Parser) parseFunDecl(funTypStr string) Stmt {
 	if funTypStr == "function" {
-		if err := p.consumeToken(FUN, "Expect 'fun'."); err != nil {
-			return nil, err
-		}
+		p.consumeToken(FUN, "Expect 'fun'.")
 	}
 
-	name := p.peekToken()
-	err := p.consumeToken(IDENTIFIER, "Expect "+funTypStr+" name.")
-	if err != nil {
-		return nil, err
-	}
+	name := p.consumeToken(IDENTIFIER, "Expect "+funTypStr+" name.")
 
-	err = p.consumeToken(LEFT_PAREN, "Expect '(' after "+funTypStr+" name.")
-	if err != nil {
-		return nil, err
-	}
+	p.consumeToken(LEFT_PAREN, "Expect '(' after "+funTypStr+" name.")
+	params := p.parseParameters()
+	p.consumeToken(RIGHT_PAREN, "Expect ')' after parameters.")
 
-	params, err := p.parseParameters()
-	if err != nil {
-		return nil, err
-	}
+	body := p.parseBlock()
 
-	err = p.consumeToken(RIGHT_PAREN, "Expect ')' after parameters.")
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := p.parseBlock()
-	if err != nil {
-		return nil, err
-	}
-
-	return &FunDecl{name, params, body}, nil
+	return &FunDecl{name, params, body}
 }
 
-func (p *Parser) parseParameters() ([]Token, error) {
+func (p *Parser) parseParameters() []Token {
 	params := []Token{}
 
 	for !p.peekIsOneOf(RIGHT_PAREN, EOF) {
 		param, ok := p.consumeOneOf(IDENTIFIER)
 		if !ok {
-			return nil, ParseError{param, "Expect parameter name."}
+			panic(ParseError{param, "Expect parameter name."})
 		}
 
 		params = append(params, param)
 		if len(params) >= 255 {
-			return nil, ParseError{
-				p.peekToken(),
+			panic(ParseError{p.peekToken(),
 				"Can't have more than 255 parameters.",
-			}
+			})
 		}
 
 		if p.peekToken().typ != RIGHT_PAREN {
-			err := p.consumeToken(COMMA, "Expect ',' between parameters.")
-			if err != nil {
-				return nil, err
-			}
+			p.consumeToken(COMMA, "Expect ',' between parameters.")
 		}
 	}
 
-	return params, nil
+	return params
 }
 
 // statement ::= exprStmt | printStmt | ifStmt | block
-func (p *Parser) parseStatement() (Stmt, error) {
+func (p *Parser) parseStatement() Stmt {
 	switch p.peekToken().typ {
 	case PRINT:
 		return p.parsePrintStmt()
@@ -291,135 +256,75 @@ func (p *Parser) parseStatement() (Stmt, error) {
 }
 
 // exprStmt ::= expression ";"
-func (p *Parser) parseExprStmt() (Stmt, error) {
-	expr, err := p.parseExpression()
-	if err != nil {
-		return nil, err
-	}
+func (p *Parser) parseExprStmt() Stmt {
+	expr := p.parseExpression()
+	p.consumeToken(SEMICOLON, "Expect ';' after expression.")
 
-	err = p.consumeToken(SEMICOLON, "Expect ';' after expression.")
-	if err != nil {
-		return nil, err
-	}
-
-	return &ExprStmt{expr}, nil
+	return &ExprStmt{expr}
 }
 
 // block ::= "{" declaration* "}"
-func (p *Parser) parseBlock() (Stmt, error) {
-	err := p.consumeToken(LEFT_BRACE, "Expect '{' before block.")
-	if err != nil {
-		return nil, err
-	}
+func (p *Parser) parseBlock() Stmt {
+	p.consumeToken(LEFT_BRACE, "Expect '{' before block.")
 
 	stmts := []Stmt{}
-
 	for !p.peekIsOneOf(RIGHT_BRACE, EOF) {
-		stmt, err := p.parseDeclaration()
-		if err != nil {
-			return nil, err
-		}
-
-		stmts = append(stmts, stmt)
+		stmts = append(stmts, p.parseDeclaration())
 	}
 
-	err = p.consumeToken(RIGHT_BRACE, "Expect '}' after block.")
-	if err != nil {
-		return nil, err
-	}
+	p.consumeToken(RIGHT_BRACE, "Expect '}' after block.")
 
-	return &Block{stmts}, nil
+	return &Block{stmts}
 }
 
 // print ::= "print" value ";"
-func (p *Parser) parsePrintStmt() (Stmt, error) {
-	if err := p.consumeToken(PRINT, "Expect 'print' statement."); err != nil {
-		return nil, err
-	}
+func (p *Parser) parsePrintStmt() Stmt {
+	p.consumeToken(PRINT, "Expect 'print' statement.")
 
-	value, err := p.parseExpression()
-	if err != nil {
-		return nil, err
-	}
+	value := p.parseExpression()
+	p.consumeToken(SEMICOLON, "Expect ';' after value.")
 
-	if err = p.consumeToken(SEMICOLON, "Expect ';' after value."); err != nil {
-		return nil, err
-	}
-
-	return &PrintStmt{value}, nil
+	return &PrintStmt{value}
 }
 
 // if ::= "if" expression block ( "else" ( block | ifStmt ) )?
 // NOTE: My ifStmt grammar is different from original lox implementation
-func (p *Parser) parseIfStmt() (Stmt, error) {
-	tok := p.peekToken()
+func (p *Parser) parseIfStmt() Stmt {
+	tok := p.consumeToken(IF, "Expect 'if' statement.")
 
-	if err := p.consumeToken(IF, "Expect 'if' statement."); err != nil {
-		return nil, err
-	}
+	cond := p.parseExpression()
 
-	cond, err := p.parseExpression()
-	if err != nil {
-		return nil, err
-	}
-
-	thenStmt, err := p.parseBlock()
-	if err != nil {
-		return nil, err
-	}
+	thenStmt := p.parseBlock()
 
 	var elseStmt Stmt = nil
-	if p.peekToken().typ == ELSE {
-		p.current++ // consume "else"
-
+	if p.tryConsume(ELSE) {
 		if p.peekToken().typ == IF {
-			elseStmt, err = p.parseIfStmt()
+			elseStmt = p.parseIfStmt()
 		} else {
-			elseStmt, err = p.parseBlock()
-		}
-
-		if err != nil {
-			return nil, err
+			elseStmt = p.parseBlock()
 		}
 	}
 
-	return &IfStmt{tok, cond, thenStmt, elseStmt}, nil
+	return &IfStmt{tok, cond, thenStmt, elseStmt}
 }
 
 // while ::= "while" expression block
-func (p *Parser) parseWhileStmt() (Stmt, error) {
+func (p *Parser) parseWhileStmt() Stmt {
 	tok := p.peekToken()
 
-	err := p.consumeToken(WHILE, "Expect 'while' statement.")
-	if err != nil {
-		return nil, err
-	}
+	p.consumeToken(WHILE, "Expect 'while' statement.")
 
-	cond, err := p.parseExpression()
-	if err != nil {
-		return nil, err
-	}
+	cond := p.parseExpression()
 
-	block, err := p.parseBlock()
-	if err != nil {
-		return nil, err
-	}
+	block := p.parseBlock()
 
-	return &WhileStmt{tok, cond, block}, nil
+	return &WhileStmt{tok, cond, block}
 }
 
-// for ::= "for" ( varDecl | exprStmt | ";" )
-//
-//	             expression? ";"
-//	             expression?
+// for ::= "for" ( varDecl | exprStmt | ";" ) expression? ";" expression?
 //				 block
-func (p *Parser) parseForStmt() (Stmt, error) {
-	tok := p.peekToken()
-
-	err := p.consumeToken(FOR, "Expect 'for' statement.")
-	if err != nil {
-		return nil, err
-	}
+func (p *Parser) parseForStmt() Stmt {
+	tok := p.consumeToken(FOR, "Expect 'for' statement.")
 
 	var initializer Stmt
 	switch tok := p.peekToken(); tok.typ {
@@ -427,130 +332,82 @@ func (p *Parser) parseForStmt() (Stmt, error) {
 		p.current++ // consume ';'
 		initializer = &NoOpStmt{}
 	case VAR:
-		initializer, err = p.parseVarDecl()
+		initializer = p.parseVarDecl()
 	default:
-		initializer, err = p.parseExprStmt()
-	}
-	if err != nil {
-		return nil, err
+		initializer = p.parseExprStmt()
 	}
 
 	var condition Expr = &NoOpExpr{}
 	if p.peekToken().typ != SEMICOLON {
-		condition, err = p.parseExpression()
-		if err != nil {
-			return nil, err
-		}
+		condition = p.parseExpression()
 	}
-
-	err = p.consumeToken(SEMICOLON, "Expect ';' after 'for' condition.")
-	if err != nil {
-		return nil, err
-	}
+	p.consumeToken(SEMICOLON, "Expect ';' after 'for' condition.")
 
 	var increment Expr = &NoOpExpr{}
 	if p.peekToken().typ != LEFT_BRACE {
-		increment, err = p.parseExpression()
-		if err != nil {
-			return nil, err
-		}
+		increment = p.parseExpression()
 	}
 
-	body, err := p.parseBlock()
-	if err != nil {
-		return nil, err
-	}
+	body := p.parseBlock()
 
-	return &ForStmt{tok, initializer, condition, increment, body}, nil
+	return &ForStmt{tok, initializer, condition, increment, body}
 }
 
 // break ::= "break;"
-func (p *Parser) parseBreakStmt() (Stmt, error) {
-	keyword := p.peekToken()
-	if err := p.consumeToken(BREAK, "Expect break."); err != nil {
-		return nil, err
-	}
+func (p *Parser) parseBreakStmt() Stmt {
+	tok := p.consumeToken(BREAK, "Expect break.")
+	p.consumeToken(SEMICOLON, "Expect ';' after 'break'.")
 
-	err := p.consumeToken(SEMICOLON, "Expect ';' after 'break'.")
-	if err != nil {
-		return nil, err
-	}
-
-	return &BreakStmt{keyword}, nil
+	return &BreakStmt{tok}
 }
 
 // cycle ::= "cycle;"
-func (p *Parser) parseCycleStmt() (Stmt, error) {
-	keyword := p.peekToken()
-	if err := p.consumeToken(CYCLE, "Expect cycle."); err != nil {
-		return nil, err
-	}
+func (p *Parser) parseCycleStmt() Stmt {
+	tok := p.consumeToken(CYCLE, "Expect cycle.")
+	p.consumeToken(SEMICOLON, "Expect ';' after 'cycle'.")
 
-	err := p.consumeToken(SEMICOLON, "Expect ';' after 'cycle'.")
-	if err != nil {
-		return nil, err
-	}
-
-	return &CycleStmt{keyword}, nil
+	return &CycleStmt{tok}
 }
 
 // return ::= "return" expression? ";"
-func (p *Parser) parseReturnStmt() (Stmt, error) {
-	if err := p.consumeToken(RETURN, "Expect return."); err != nil {
-		return nil, err
-	}
+func (p *Parser) parseReturnStmt() Stmt {
+	tok := p.consumeToken(RETURN, "Expect return.")
 
-	tok := p.tokens[p.current-1]
 	var value Expr = nil
-
 	if p.peekToken().typ != SEMICOLON {
-		var err error // necessary so `value` doesn't get shadowed
-		value, err = p.parseExpression()
-		if err != nil {
-			return nil, err
-		}
+		value = p.parseExpression()
 	}
+	p.consumeToken(SEMICOLON, "Expect ';' after return value.")
 
-	err := p.consumeToken(SEMICOLON, "Expect ';' after return value.")
-	if err != nil {
-		return nil, err
-	}
-
-	return &ReturnStmt{tok, value}, nil
+	return &ReturnStmt{tok, value}
 }
 
 // expression ::= assignment
-func (p *Parser) parseExpression() (Expr, error) {
+func (p *Parser) parseExpression() Expr {
 	return p.parseAssignment()
 }
 
-// assignment ::= comma
-//
-//	              | call ( ( "=" assignment )
-//						 | ( ( "-=" | "+=" | "/=" | "*=" ) expression ) )
-func (p *Parser) parseAssignment() (Expr, error) {
-	expr, err := p.parseComma()
-	if err != nil {
-		return nil, err
-	}
+/* assignment ::= comma
+ *	            | call ( ( "=" assignment )
+ *				| ( ( "-=" | "+=" | "/=" | "*=" ) expression ) )
+ */
+func (p *Parser) parseAssignment() Expr {
+	expr := p.parseComma()
 
 	if tok := p.peekToken(); tok.typ == EQUAL {
 		p.current++ // consume '='
 
-		value, err := p.parseAssignment()
-		if err != nil {
-			return nil, err
-		}
+		value := p.parseAssignment()
 
 		switch e := expr.(type) {
 		case *Variable:
-			return &Assign{e.name, value}, nil
+			return &Assign{e.name, value}
 		case *Index:
-			return &SetIndex{e.list, e.bracket, e.index, value}, nil
+			return &SetIndex{e.list, e.bracket, e.index, value}
 		case *Get:
-			return &Set{e.object, e.name, value}, nil
+			return &Set{e.object, e.name, value}
 		default:
-			return nil, ParseError{tok, "Invalid assignment target."}
+			panic(ParseError{tok, "Invalid assignment target."})
 		}
 	}
 
@@ -559,320 +416,200 @@ func (p *Parser) parseAssignment() (Expr, error) {
 	); ok { // Desugar lhs .= rhs into lhs = lhs . rhs
 		op := tok.UnderlyingOp()
 
-		rhs, err := p.parseExpression()
-		if err != nil {
-			return nil, err
-		}
+		rhs := p.parseExpression()
 
 		switch e := expr.(type) {
 		case *Variable:
-			return &Assign{
-				e.name, &Binary{e, op, rhs},
-			}, nil
+			return &Assign{e.name, &Binary{e, op, rhs}}
 		case *Index:
-			return &SetIndex{
-				e.list, e.bracket, e.index, &Binary{e, op, rhs},
-			}, nil
+			return &SetIndex{e.list, e.bracket, e.index, &Binary{e, op, rhs}}
 		case *Get:
-			return &Set{
-				e.object, e.name, &Binary{e, op, rhs},
-			}, nil
+			return &Set{e.object, e.name, &Binary{e, op, rhs}}
 		default:
-			return nil, ParseError{tok, "Invalid assignment target."}
+			panic(ParseError{tok, "Invalid assignment target."})
 		}
 
 	}
 
-	return expr, nil
+	return expr
 }
 
 // CHALLENGE 1: Add comma (easy)
 // comma ::= logicalOr ( , logicalOr )*
-func (p *Parser) parseComma() (Expr, error) {
+func (p *Parser) parseComma() Expr {
 	if tok := p.peekToken(); tok.typ == COMMA {
 		p.current++ // consume ','
-		_, _ = p.parseLogicalOr()
-
-		err := ParseError{tok, "Missing left-hand operand for ','"}
-		return nil, err
+		_ = p.parseLogicalOr()
+		panic(ParseError{tok, "Missing left-hand operand for ','"})
 	}
 
-	expr, err := p.parseLogicalOr()
-	if err != nil {
-		return nil, err
-	}
+	expr := p.parseLogicalOr()
 
 	for op := p.peekToken(); op.typ == COMMA; op = p.peekToken() {
 		p.current++
-
-		rhs, err := p.parseLogicalOr()
-		if err != nil {
-			return nil, err
-		}
-
+		rhs := p.parseLogicalOr()
 		expr = &Binary{expr, op, rhs}
 	}
 
-	return expr, nil
+	return expr
 }
 
 // logicalOr ::= logicalAnd ( "or" logicalAnd )*
-func (p *Parser) parseLogicalOr() (Expr, error) {
+func (p *Parser) parseLogicalOr() Expr {
 	if tok, ok := p.consumeOneOf(OR); ok {
-		_, _ = p.parseLogicalAnd()
-
-		err := ParseError{tok, "Missing left-hand operand for 'or'"}
-		return nil, err
+		_ = p.parseLogicalAnd()
+		panic(ParseError{tok, "Missing left-hand operand for 'or'"})
 	}
 
-	expr, err := p.parseLogicalAnd()
-	if err != nil {
-		return nil, err
-	}
-
+	expr := p.parseLogicalAnd()
 	for p.peekToken().typ == OR {
-		p.current++ // consume "or"
-		op := p.tokens[p.current-1]
-
-		rhs, err := p.parseLogicalAnd()
-		if err != nil {
-			return nil, err
-		}
-
+		op := p.peekAndConsume()
+		rhs := p.parseLogicalAnd()
 		expr = &Binary{expr, op, rhs}
 	}
 
-	return expr, nil
+	return expr
 }
 
 // logic_or ::= equality ( "and" equality )*
-func (p *Parser) parseLogicalAnd() (Expr, error) {
+func (p *Parser) parseLogicalAnd() Expr {
 	if tok, ok := p.consumeOneOf(AND); ok {
-		_, _ = p.parseEquality()
-
-		err := ParseError{tok, "Missing left-hand operand for 'and'"}
-		return nil, err
+		_ = p.parseEquality()
+		panic(ParseError{tok, "Missing left-hand operand for 'and'"})
 	}
 
-	expr, err := p.parseEquality()
-	if err != nil {
-		return nil, err
-	}
-
+	expr := p.parseEquality()
 	for p.peekToken().typ == AND {
-		p.current++ // consume "and"
-		op := p.tokens[p.current-1]
-
-		rhs, err := p.parseEquality()
-		if err != nil {
-			return nil, err
-		}
-
+		op := p.peekAndConsume()
+		rhs := p.parseEquality()
 		expr = &Binary{expr, op, rhs}
 	}
 
-	return expr, nil
+	return expr
 }
 
 // equality ::= comparison ( ('!=' | '==') comparison )*
-func (p *Parser) parseEquality() (Expr, error) {
+func (p *Parser) parseEquality() Expr {
 	if tok, ok := p.consumeOneOf(BANG_EQUAL, EQUAL_EQUAL); ok {
-		_, _ = p.parseComparison()
-
-		err := ParseError{tok,
-			"Missing left-hand operand for '" + tok.lexeme + "'"}
-		return nil, err
+		_ = p.parseComparison()
+		panic(ParseError{tok,
+			"Missing left-hand operand for '" + tok.lexeme + "'"})
 	}
 
-	expr, err := p.parseComparison()
-	if err != nil {
-		return nil, err
-	}
-
-	// We loop here to support syntax like:
-	// a < b < c (methinks)
-	// NOTE: 'a < b < c' is currently unsupported tho :(
+	expr := p.parseComparison()
+	// TODO: Support syntax for 'a < b < c'
 	for p.peekIsOneOf(BANG_EQUAL, EQUAL_EQUAL) {
 		op := p.peekAndConsume()
-
-		rhs, err := p.parseComparison()
-		if err != nil {
-			return nil, err
-		}
-
+		rhs := p.parseComparison()
 		expr = &Binary{expr, op, rhs}
 	}
 
-	return expr, nil
+	return expr
 }
 
 // comparison ::= term ( ( '>' | '>=' | '<' | '<=' ) term )*
-func (p *Parser) parseComparison() (Expr, error) {
+func (p *Parser) parseComparison() Expr {
 	// if (tok := self.peekToken()) in (
 	//     GREATER, GREATER_EQUAL, LESS, LESS_EQUAL
 	// ): ...
 	if tok, ok := p.consumeOneOf(
 		GREATER, GREATER_EQUAL, LESS, LESS_EQUAL,
 	); ok {
-		_, _ = p.parseTerm()
+		_ = p.parseTerm()
 
-		err := ParseError{tok,
-			"Missing left-hand operand for '" + tok.lexeme + "'"}
-		return nil, err
+		panic(ParseError{tok,
+			"Missing left-hand operand for '" + tok.lexeme + "'"})
 	}
 
-	expr, err := p.parseTerm()
-	if err != nil {
-		return nil, err
-	}
+	expr := p.parseTerm()
 
 	// TODO: Allow for chain comparisons
 	// e.g. we want to desugar 1 < 2 < 3  into (1 < 2) and (2 < 3)
 	for p.peekIsOneOf(GREATER, GREATER_EQUAL, LESS, LESS_EQUAL) {
 		op := p.peekAndConsume()
-
-		rhs, err := p.parseTerm()
-		if err != nil {
-			return nil, err
-		}
-
+		rhs := p.parseTerm()
 		expr = &Binary{expr, op, rhs}
 	}
 
-	return expr, nil
+	return expr
 }
 
 // term ::= factor ( ( '-' | '+' ) factor )*
-func (p *Parser) parseTerm() (Expr, error) {
+func (p *Parser) parseTerm() Expr {
 	if tok := p.peekToken(); tok.typ == PLUS {
-		p.current++
-		_, _ = p.parseFactor()
-
-		err := ParseError{tok, "Missing left-hand operand for '+'"}
-		return nil, err
+		p.current++ // consume '+'
+		_ = p.parseFactor()
+		panic(ParseError{tok, "Missing left-hand operand for '+'"})
 	}
 
-	expr, err := p.parseFactor()
-	if err != nil {
-		return nil, err
-	}
-
+	expr := p.parseFactor()
 	for p.peekIsOneOf(MINUS, PLUS) {
-		p.current++
-
-		op := p.tokens[p.current-1]
-		rhs, err := p.parseFactor()
-		if err != nil {
-			return nil, err
-		}
-
+		op := p.peekAndConsume()
+		rhs := p.parseFactor()
 		expr = &Binary{expr, op, rhs}
 	}
 
-	return expr, nil
+	return expr
 }
 
 // factor ::= unary ( ( '*' | '/' ) unary )*
-func (p *Parser) parseFactor() (Expr, error) {
+func (p *Parser) parseFactor() Expr {
 	if tok, ok := p.consumeOneOf(STAR, SLASH); ok {
-		_, _ = p.parseUnary()
-
-		err := ParseError{tok,
-			"Missing left-hand operand for '" + tok.lexeme + "'"}
-		return nil, err
+		_ = p.parseUnary()
+		panic(ParseError{tok,
+			"Missing left-hand operand for '" + tok.lexeme + "'"})
 	}
 
-	expr, err := p.parseUnary()
-	if err != nil {
-		return nil, err
-	}
-
+	expr := p.parseUnary()
 	for p.peekIsOneOf(SLASH, STAR) {
 		op := p.peekAndConsume()
-
-		rhs, err := p.parseUnary()
-		if err != nil {
-			return nil, err
-		}
-
+		rhs := p.parseUnary()
 		expr = &Binary{expr, op, rhs}
 	}
 
-	return expr, nil
+	return expr
 }
 
 // unary ::= ( ( 'not' | '-' | '--' | '++' ) unary ) | postfix
-func (p *Parser) parseUnary() (Expr, error) {
+func (p *Parser) parseUnary() Expr {
 	if op, ok := p.consumeOneOf(NOT, MINUS, MINUS_MINUS, PLUS_PLUS); ok {
-		rhs, err := p.parseUnary()
-		if err != nil {
-			return nil, err
-		}
-
-		return &Unary{op, rhs}, nil
+		rhs := p.parseUnary()
+		return &Unary{op, rhs}
 	}
 
 	return p.parsePostfix()
 }
 
 // postfix ::= suffix ( '--' | '++' )?
-func (p *Parser) parsePostfix() (Expr, error) {
-	expr, err := p.parseSuffix()
-	if err != nil {
-		return nil, err
-	}
-
+func (p *Parser) parsePostfix() Expr {
+	expr := p.parseSuffix()
 	if op, ok := p.consumeOneOf(MINUS_MINUS, PLUS_PLUS); ok {
-		return &Postfix{expr, op}, nil
+		return &Postfix{expr, op}
 	}
 
-	return expr, nil
+	return expr
 }
 
-// suffix ::= primary ( "(" arguments? ")"
-//
-//	                   | "." IDENTIFIER
-//						  | "[" logicalOr "]" )*
-func (p *Parser) parseSuffix() (Expr, error) {
-	expr, err := p.parsePrimary()
-	if err != nil {
-		return nil, err
-	}
+/*
+ * suffix ::= primary ( "(" arguments? ")"
+ *	                  | "." IDENTIFIER
+ *					  | "[" logicalOr "]" )*
+ */
+func (p *Parser) parseSuffix() Expr {
+	expr := p.parsePrimary()
 
 	for repeat := true; repeat; {
 		switch tok := p.peekAndConsume(); tok.typ {
 		case LEFT_PAREN:
-			args, err := p.parseArguments()
-			if err != nil {
-				return nil, err
-			}
-
-			err = p.consumeToken(RIGHT_PAREN, "Expect ')' after arguments.")
-			if err != nil {
-				return nil, err
-			}
-
+			args := p.parseArguments()
+			p.consumeToken(RIGHT_PAREN, "Expect ')' after arguments.")
 			expr = &CallExpr{expr, tok, args}
 		case DOT:
-			name := p.peekToken()
-
-			err = p.consumeToken(IDENTIFIER, "Expect property name after '.'")
-			if err != nil {
-				return nil, err
-			}
-
+			name := p.consumeToken(IDENTIFIER, "Expect property name after '.'")
 			expr = &Get{expr, name}
 		case LEFT_BRACKET:
-			index, err := p.parseLogicalOr()
-			if err != nil {
-				return nil, err
-			}
-
-			err = p.consumeToken(RIGHT_BRACKET, "Expect ']' after index.")
-			if err != nil {
-				return nil, err
-			}
-
+			index := p.parseLogicalOr()
+			p.consumeToken(RIGHT_BRACKET, "Expect ']' after index.")
 			expr = &Index{expr, tok, index}
 		default:
 			p.current-- // puke the last token
@@ -880,43 +617,29 @@ func (p *Parser) parseSuffix() (Expr, error) {
 		}
 	}
 
-	return expr, nil
+	return expr
 }
 
 // arguments ::= expression ( "," expression )*
-func (p *Parser) parseArguments() ([]Expr, error) {
+func (p *Parser) parseArguments() []Expr {
 	args := []Expr{}
 
 	for !p.peekIsOneOf(RIGHT_PAREN, EOF) {
-		// Can't use parseExpression() bc parseComma messes up the parsing
-		// So we start at the next precedence level below parseComma
-		// Also, parsing assignments is bad too here*. So we kill two birds with one stone!
-		// * Unless we want to support keyword arguments, which we don't yet!
-
-		arg, err := p.parseLogicalOr()
-		if err != nil {
-			return nil, err
-		}
-
+		arg := p.parseLogicalOr()
 		args = append(args, arg)
 
 		if len(args) >= 255 {
-			return nil, ParseError{
-				p.peekToken(),
+			panic(ParseError{p.peekToken(),
 				"Can't have more than 255 arguments.",
-			}
+			})
 		}
 
 		if p.peekToken().typ != RIGHT_PAREN {
-			if err = p.consumeToken(
-				COMMA, "Expect ',' between function arguments.",
-			); err != nil {
-				return nil, err
-			}
+			p.consumeToken(COMMA, "Expect ',' between function arguments.")
 		}
 	}
 
-	return args, nil
+	return args
 }
 
 /*
@@ -928,34 +651,27 @@ func (p *Parser) parseArguments() ([]Expr, error) {
  *			 | ifExpr
  * 			 | anonFunction
  */
-func (p *Parser) parsePrimary() (Expr, error) {
+func (p *Parser) parsePrimary() Expr {
 	switch tok := p.peekAndConsume(); tok.typ {
 	case NUMBER:
-		return &Literal{tok.literal}, nil
+		return &Literal{tok.literal}
 	case STRING:
-		return &Literal{tok.literal}, nil
+		return &Literal{tok.literal}
 	case TRUE:
-		return &Literal{true}, nil
+		return &Literal{true}
 	case FALSE:
-		return &Literal{false}, nil
+		return &Literal{false}
 	case NIL:
-		return &Literal{nil}, nil
+		return &Literal{nil}
 	case LEFT_PAREN:
-		expr, err := p.parseExpression()
-		if err != nil {
-			return nil, err
-		}
+		expr := p.parseExpression()
+		p.consumeToken(RIGHT_PAREN, "Expect ')' after expression.")
 
-		err = p.consumeToken(RIGHT_PAREN, "Expect ')' after expression.")
-		if err != nil {
-			return nil, err
-		}
-
-		return &Grouping{expr}, nil
+		return &Grouping{expr}
 	case THIS:
-		return &This{tok}, nil
+		return &This{tok}
 	case IDENTIFIER:
-		return &Variable{tok}, nil
+		return &Variable{tok}
 	case LEFT_BRACKET:
 		return p.parseList()
 	case IF:
@@ -963,117 +679,61 @@ func (p *Parser) parsePrimary() (Expr, error) {
 	case FUN:
 		return p.parseAnonFunction()
 	default:
-		return nil, ParseError{tok, "Expect expression."}
+		panic(ParseError{tok, "Expect expression."})
 	}
 }
 
-func (p *Parser) parseList() (Expr, error) {
+func (p *Parser) parseList() Expr {
 	lst := []Expr{}
 
 	for !p.peekIsOneOf(RIGHT_BRACKET, EOF) {
-		ele, err := p.parseLogicalOr()
-		if err != nil {
-			return nil, err
-		}
-
+		ele := p.parseLogicalOr()
 		lst = append(lst, ele)
 
 		if p.peekToken().typ != RIGHT_BRACKET {
-			err := p.consumeToken(COMMA, "Expect ',' between list elements.")
-			if err != nil {
-				return nil, err
-			}
+			p.consumeToken(COMMA, "Expect ',' between list elements.")
 		}
 	}
 
-	err := p.consumeToken(RIGHT_BRACKET, "Expect ']' after list.")
-	if err != nil {
-		return nil, err
-	}
+	p.consumeToken(RIGHT_BRACKET, "Expect ']' after list.")
 
-	return &List{lst}, nil
+	return &List{lst}
 }
 
 // CHALLENGE 2: Add ternary operator
 // (I opted to do add the rust-style if expr instead)
 // ifExpr ::= 'if' logicalOr { expr } 'else' ( { expr } | ifExpr )
-func (p *Parser) parseIfExpr() (Expr, error) {
+func (p *Parser) parseIfExpr() Expr {
 	tok := p.tokens[p.current-1]
+	cond := p.parseLogicalOr()
 
-	cond, err := p.parseLogicalOr()
-	if err != nil {
-		return nil, err
-	}
+	p.consumeToken(LEFT_BRACE, "Expect '{' after condition.")
+	thenExpr := p.parseExpression()
+	p.consumeToken(RIGHT_BRACE, "Expect '}' after if-block.")
 
-	err = p.consumeToken(LEFT_BRACE, "Expect '{' after condition.")
-	if err != nil {
-		return nil, err
-	}
-
-	thenExpr, err := p.parseExpression()
-	if err != nil {
-		return nil, err
-	}
-
-	err = p.consumeToken(RIGHT_BRACE, "Expect '}' after if-block.")
-	if err != nil {
-		return nil, err
-	}
-
-	err = p.consumeToken(ELSE, "Expect 'else' after 'if' expression.")
-	if err != nil {
-		return nil, err
-	}
+	p.consumeToken(ELSE, "Expect 'else' after 'if' expression.")
 
 	var elseExpr Expr
 	if p.peekToken().typ == IF {
-		elseExpr, err = p.parseIfExpr()
-		if err != nil {
-			return nil, err
-		}
+		elseExpr = p.parseIfExpr()
 	} else {
-		err = p.consumeToken(LEFT_BRACE, "Expect '{' after 'else'.")
-		if err != nil {
-			return nil, err
-		}
-
-		elseExpr, err = p.parseExpression()
-		if err != nil {
-			return nil, err
-		}
-
-		err = p.consumeToken(RIGHT_BRACE, "Expect '}' after else-block.")
-		if err != nil {
-			return nil, err
-		}
+		p.consumeToken(LEFT_BRACE, "Expect '{' after 'else'.")
+		elseExpr = p.parseExpression()
+		p.consumeToken(RIGHT_BRACE, "Expect '}' after else-block.")
 	}
 
-	return &IfExpr{tok, cond, thenExpr, elseExpr}, nil
+	return &IfExpr{tok, cond, thenExpr, elseExpr}
 }
 
 // anonFunction ::= "fun" "(" parameters? ")" block
-func (p *Parser) parseAnonFunction() (Expr, error) {
+func (p *Parser) parseAnonFunction() Expr {
 	tok := p.tokens[p.current-1] // Will always be a FUN token
 
-	err := p.consumeToken(LEFT_PAREN, "Expect '(' after 'fun'.")
-	if err != nil {
-		return nil, err
-	}
+	p.consumeToken(LEFT_PAREN, "Expect '(' after 'fun'.")
+	params := p.parseParameters()
+	p.consumeToken(RIGHT_PAREN, "Expect ')' after parameters.")
 
-	params, err := p.parseParameters()
-	if err != nil {
-		return nil, err
-	}
+	body := p.parseBlock()
 
-	err = p.consumeToken(RIGHT_PAREN, "Expect ')' after parameters.")
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := p.parseBlock()
-	if err != nil {
-		return nil, err
-	}
-
-	return &FunExpr{tok, params, body}, nil
+	return &FunExpr{tok, params, body}
 }

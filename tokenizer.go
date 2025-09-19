@@ -297,11 +297,10 @@ func (t *Tokenizer) scanIdentifierOrKeyword() {
 
 func (t *Tokenizer) scanComment() error {
 	// We don't add any tokens for comments!
-	srcLen := len(t.source)
 	// Block comment #[ ... ]#
-	if t.current < srcLen && t.peekAndConsume("[") {
+	if t.current <  len(t.source) && t.peekAndConsume("[") {
 		terminated := t.peekAndConsume("]#")
-		for t.current < srcLen && !terminated {
+		for t.current < len(t.source) && !terminated {
 			if t.source[t.current] == '\n' {
 				t.line++
 			}
@@ -317,7 +316,7 @@ func (t *Tokenizer) scanComment() error {
 			}
 		}
 	} else { // Single line comment # ...
-		for t.current < srcLen && t.peekChar() != '\n' {
+		for t.current < len(t.source) && t.peekChar() != '\n' {
 			t.current++
 		}
 	}

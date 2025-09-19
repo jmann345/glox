@@ -119,11 +119,7 @@ func run(source string, resolver *Resolver) {
 	parser := Parser{toks, 0}
 	stmts := []Stmt{}
 	for !parser.IsAtEnd() {
-		stmt, err := parser.Parse()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "Parser:", err)
-			continue
-		}
+		stmt := parser.Parse()
 
 		stmts = append(stmts, stmt)
 	}
