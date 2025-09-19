@@ -25,7 +25,6 @@ func (f *Function) Call(interpreter *Interpreter, arguments []any) any {
 		panic("Unreachable.")
 	}
 
-	// TODO: See if I can make this less ugly.
 	err := interpreter.execBlock(body, localEnv)
 	if ret, ok := err.(Return); ok {
 		if f.isInitializer {
@@ -69,9 +68,6 @@ func (f *AnonFunction) Call(interpreter *Interpreter, arguments []any) any {
 		panic("Unreachable.")
 	}
 
-	// TODO: Make this less ugly.
-	// I don't want to have to force every Call implementation
-	// to also return an error.
 	err := interpreter.execBlock(body, localEnv)
 	if ret, ok := err.(Return); ok {
 		return ret.value

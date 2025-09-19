@@ -1,6 +1,6 @@
 package main // TODO: Make this package interpreter
 
-import "fmt" // TODO: Make Class and Instance extend Object
+import "fmt"
 
 type Object interface {
 	Get(name Token) (any, error)

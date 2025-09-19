@@ -84,6 +84,10 @@ func (t *Tokenizer) scanToken() error {
 		t.addToken(DOT, nil)
 	case ';':
 		t.addToken(SEMICOLON, nil)
+	case ':':
+		if t.match('=') {
+			t.addToken(COLON_EQUAL, nil)
+		}
 	case '-':
 		if t.match('-') {
 			t.addToken(MINUS_MINUS, nil)

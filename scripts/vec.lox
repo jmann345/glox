@@ -1,6 +1,3 @@
-# TODO: Make this a script with a wrapper class around list
-# Which adds functional features (map, filter, reduce etc.)
-
 class Vec {
     init() {
         this.lst = [];

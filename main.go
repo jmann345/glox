@@ -116,12 +116,15 @@ func run(source string, resolver *Resolver) {
 		fmt.Fprintln(os.Stderr, "Tokenizer:", err)
 	}
 
-	parser := Parser{toks, 0}
+	parser := NewParser(toks)
 	stmts := []Stmt{}
 	for !parser.IsAtEnd() {
 		stmt := parser.Parse()
-
 		stmts = append(stmts, stmt)
+	}
+
+	if parser.HadError {
+		return
 	}
 
 	var err error

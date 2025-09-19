@@ -144,7 +144,7 @@ func (r *Resolver) resolveLocal(expr Expr, name Token, markUsed bool) {
 func (r *Resolver) resolveStmt(stmt Stmt) error {
 	switch s := stmt.(type) {
 	case *Block:
-		return r.resBlockStmt(s)
+		return r.resBlockStmt(s, true)
 	case *BreakStmt:
 		return r.resBreakStmt(s)
 	case *ClassDecl:
@@ -174,9 +174,15 @@ func (r *Resolver) resolveStmt(stmt Stmt) error {
 	}
 }
 
-func (r *Resolver) resBlockStmt(stmt *Block) (err error) {
-	r.beginScope()
-	defer r.endScope(&err)
+func (r *Resolver) resBlockStmt(stmt *Block, makeClosure bool) (err error) {
+	// Sometimes, for example in function declarations,
+	// we will want to declare some identifiers that will be usable
+	// inside the block. In those cases, a new closure for the block
+	// will be created before resBlockStmt() is called
+	if makeClosure {
+		r.beginScope()
+		defer r.endScope(&err)
+	}
 
 	for _, stmt := range stmt.stmts {
 		if err = r.resolveStmt(stmt); err != nil {
@@ -290,16 +296,9 @@ func (r *Resolver) resFunctionStmt(
 		r.define(param, DEFINED)
 	}
 
-	body, ok := stmt.body.(*Block)
-	if !ok {
-		panic("Unreachable.")
-	}
-
-	// We don't resolve the block stmt directly to avoid creating a new scope
-	for _, s := range body.stmts {
-		if err = r.resolveStmt(s); err != nil {
-			return
-		}
+	body, _ := stmt.body.(*Block)
+	if err = r.resBlockStmt(body, false); err != nil {
+		return
 	}
 
 	return
@@ -521,10 +520,8 @@ func (r *Resolver) resFunctionExpr(
 	}
 
 	body, _ := expr.body.(*Block)
-	for _, s := range body.stmts {
-		if err = r.resolveStmt(s); err != nil {
-			return
-		}
+	if err = r.resBlockStmt(body, false); err != nil {
+		return
 	}
 
 	return

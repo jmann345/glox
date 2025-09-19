@@ -1,0 +1,12 @@
+fun main() {
+    if {
+      print "Hello World!";
+    }
+
+    var i = 10;
+    while i-->0 {
+        print i;
+    }
+}
+
+main();

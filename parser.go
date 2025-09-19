@@ -19,9 +19,15 @@ func (e ParseError) Error() string {
 }
 
 type Parser struct {
-	tokens  []Token
-	current int
+	tokens   []Token
+	current  int
+	HadError bool
 }
+
+func NewParser(tokens []Token) *Parser {
+	return &Parser{tokens, 0, false}
+}
+
 
 func (p *Parser) IsAtEnd() bool {
 	return p.peekToken().typ == EOF
@@ -30,6 +36,11 @@ func (p *Parser) IsAtEnd() bool {
 // program ::= declaration* EOF
 func (p *Parser) Parse() Stmt {
 	return p.parseDeclaration()
+}
+
+func (p *Parser) report(err ParseError) {
+	p.HadError = true
+	fmt.Fprintln(os.Stderr, "Parser:", err)
 }
 
 func (p *Parser) peekToken() Token {
@@ -87,8 +98,7 @@ func (p *Parser) consumeOneOf(types ...TokenType) (Token, bool) {
 }
 
 func (p *Parser) synchronize() {
-	p.current++
-	for p.current < len(p.tokens) {
+	for p.current++; p.current < len(p.tokens); p.current++ {
 		prev := p.tokens[p.current-1]
 		if prev.typ == SEMICOLON {
 			return
@@ -97,8 +107,6 @@ func (p *Parser) synchronize() {
 		if p.peekIsOneOf(CLASS, FUN, VAR, FOR, IF, WHILE, PRINT, RETURN) {
 			return
 		}
-
-		p.current++
 	}
 }
 
@@ -106,8 +114,9 @@ func (p *Parser) synchronize() {
 func (p *Parser) parseDeclaration() (stmt Stmt) {
     defer func() {
         if r := recover(); r != nil {
+			p.HadError = true
             if err, ok := r.(ParseError); ok {
-				fmt.Fprintln(os.Stderr, "Parser:", err)
+				p.report(err)
                 p.synchronize()
 				stmt = &NoOpStmt{}
             } else {
@@ -211,14 +220,10 @@ func (p *Parser) parseParameters() []Token {
 	params := []Token{}
 
 	for !p.peekIsOneOf(RIGHT_PAREN, EOF) {
-		param, ok := p.consumeOneOf(IDENTIFIER)
-		if !ok {
-			panic(ParseError{param, "Expect parameter name."})
-		}
-
+		param := p.consumeToken(IDENTIFIER, "Expect parameter name.")
 		params = append(params, param)
 		if len(params) >= 255 {
-			panic(ParseError{p.peekToken(),
+			p.report(ParseError{p.peekToken(),
 				"Can't have more than 255 parameters.",
 			})
 		}
@@ -407,7 +412,7 @@ func (p *Parser) parseAssignment() Expr {
 		case *Get:
 			return &Set{e.object, e.name, value}
 		default:
-			panic(ParseError{tok, "Invalid assignment target."})
+			p.report(ParseError{tok, "Invalid assignment target."})
 		}
 	}
 
@@ -426,7 +431,7 @@ func (p *Parser) parseAssignment() Expr {
 		case *Get:
 			return &Set{e.object, e.name, &Binary{e, op, rhs}}
 		default:
-			panic(ParseError{tok, "Invalid assignment target."})
+			p.report(ParseError{tok, "Invalid assignment target."})
 		}
 
 	}
@@ -437,10 +442,10 @@ func (p *Parser) parseAssignment() Expr {
 // CHALLENGE 1: Add comma (easy)
 // comma ::= logicalOr ( , logicalOr )*
 func (p *Parser) parseComma() Expr {
-	if tok := p.peekToken(); tok.typ == COMMA {
-		p.current++ // consume ','
+	if tok, ok := p.consumeOneOf(COMMA); ok {
 		_ = p.parseLogicalOr()
-		panic(ParseError{tok, "Missing left-hand operand for ','"})
+		p.report(ParseError{tok, "Missing left-hand operand for ','"})
+		return &NoOpExpr{}
 	}
 
 	expr := p.parseLogicalOr()
@@ -458,10 +463,12 @@ func (p *Parser) parseComma() Expr {
 func (p *Parser) parseLogicalOr() Expr {
 	if tok, ok := p.consumeOneOf(OR); ok {
 		_ = p.parseLogicalAnd()
-		panic(ParseError{tok, "Missing left-hand operand for 'or'"})
+		p.report(ParseError{tok, "Missing left-hand operand for 'or'"})
+		return &NoOpExpr{}
 	}
 
 	expr := p.parseLogicalAnd()
+
 	for p.peekToken().typ == OR {
 		op := p.peekAndConsume()
 		rhs := p.parseLogicalAnd()
@@ -475,10 +482,12 @@ func (p *Parser) parseLogicalOr() Expr {
 func (p *Parser) parseLogicalAnd() Expr {
 	if tok, ok := p.consumeOneOf(AND); ok {
 		_ = p.parseEquality()
-		panic(ParseError{tok, "Missing left-hand operand for 'and'"})
+		p.report(ParseError{tok, "Missing left-hand operand for 'and'"})
+		return &NoOpExpr{}
 	}
 
 	expr := p.parseEquality()
+
 	for p.peekToken().typ == AND {
 		op := p.peekAndConsume()
 		rhs := p.parseEquality()
@@ -492,8 +501,9 @@ func (p *Parser) parseLogicalAnd() Expr {
 func (p *Parser) parseEquality() Expr {
 	if tok, ok := p.consumeOneOf(BANG_EQUAL, EQUAL_EQUAL); ok {
 		_ = p.parseComparison()
-		panic(ParseError{tok,
+		p.report(ParseError{tok,
 			"Missing left-hand operand for '" + tok.lexeme + "'"})
+		return &NoOpExpr{}
 	}
 
 	expr := p.parseComparison()
@@ -516,9 +526,9 @@ func (p *Parser) parseComparison() Expr {
 		GREATER, GREATER_EQUAL, LESS, LESS_EQUAL,
 	); ok {
 		_ = p.parseTerm()
-
-		panic(ParseError{tok,
+		p.report(ParseError{tok,
 			"Missing left-hand operand for '" + tok.lexeme + "'"})
+		return &NoOpExpr{}
 	}
 
 	expr := p.parseTerm()
@@ -536,10 +546,10 @@ func (p *Parser) parseComparison() Expr {
 
 // term ::= factor ( ( '-' | '+' ) factor )*
 func (p *Parser) parseTerm() Expr {
-	if tok := p.peekToken(); tok.typ == PLUS {
-		p.current++ // consume '+'
+	if tok, ok := p.consumeOneOf(PLUS); ok {
 		_ = p.parseFactor()
-		panic(ParseError{tok, "Missing left-hand operand for '+'"})
+		p.report(ParseError{tok, "Missing left-hand operand for '+'"})
+		return &NoOpExpr{}
 	}
 
 	expr := p.parseFactor()
@@ -556,8 +566,9 @@ func (p *Parser) parseTerm() Expr {
 func (p *Parser) parseFactor() Expr {
 	if tok, ok := p.consumeOneOf(STAR, SLASH); ok {
 		_ = p.parseUnary()
-		panic(ParseError{tok,
+		p.report(ParseError{tok,
 			"Missing left-hand operand for '" + tok.lexeme + "'"})
+		return &NoOpExpr{}
 	}
 
 	expr := p.parseUnary()
@@ -629,7 +640,7 @@ func (p *Parser) parseArguments() []Expr {
 		args = append(args, arg)
 
 		if len(args) >= 255 {
-			panic(ParseError{p.peekToken(),
+			p.report(ParseError{p.peekToken(),
 				"Can't have more than 255 arguments.",
 			})
 		}

@@ -92,7 +92,7 @@ func (t Type) Call(_ *Interpreter, arguments []any) any {
 		return o.class.Name
 	case *Class:
 		return "type"
-	case *Function, *AnonFunction: // TODO: Make this work with builtins and methods
+	case *Function, *AnonFunction:
 		var params []Token
 		if fn, ok := o.(*Function); ok {
 			params = fn.decl.params

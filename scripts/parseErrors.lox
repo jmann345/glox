@@ -1,0 +1,71 @@
+# missing left-hand operand cases
+, 1;                         # comma lhs
+or true;                     # 'or' lhs
+and false;                   # 'and' lhs
+== 1;                        # '==' lhs
+!= 1;                        # '!=' lhs
+> 1;                         # '>' lhs
+>= 1;                        # '>=' lhs
+< 1;                         # '<' lhs
+<= 1;                        # '<=' lhs
++ 1;                         # '+' lhs
+* 1;                         # '*' lhs
+/ 1;                         # '/' lhs
+
+# invalid assignment target
+(1) = 2;
+
+# property name after dot
+a.;
+
+# call argument list issues
+f(1,2;                       # missing ')'
+f(1 2);                      # missing ',' between args
+
+# list literal issues
+[1 2];                       # missing ',' between elements
+[1,2;                        # missing ']' after list
+
+# grouping
+(1 + 2;                      # missing ')'
+
+# indexing
+a[1;                         # missing ']' after index
+
+# if-expression errors (must be used in expression position)
+print if true { 1 };                     # missing 'else' after if-expr
+print if true 1 } else { 2 };            # missing '{' after condition
+print if true { 1 else { 2 };            # missing '}' after if-block
+print if true { 1 } else 2 };            # missing '{' after 'else'
+print if true { 1 } else { 2 ;           # missing '}' after else-block
+
+# class declaration errors
+class { }                                 # missing class name
+class C ;                                  # missing '{' before class body
+class D { fun m() {}                       # missing '}' after class body
+var a = 1;                                 # helps resync after the unterminated class
+
+# function declaration errors
+fun foo( a b ) {}                          # missing ',' between parameters
+fun bar(a, b { }                           # missing ')' after parameters
+fun baz() ;                                # missing '{' before block
+
+# variable declaration errors
+var ;                                      # invalid identifier
+var x = 1                                  # missing ';' after var decl
+
+# print statement
+print 1                                    # missing ';' after print
+
+# while statement
+while true ;                               # missing '{' before block
+
+# for statement
+for ; true { }                             # missing ';' after for condition
+
+# loop control statements
+break                                      # missing ';' after break
+cycle                                      # missing ';' after cycle
+
+# return statement
+return 1                                   # missing ';' after return value
