@@ -464,7 +464,6 @@ func (p *Parser) parseLogicalOr() Expr {
 	if tok, ok := p.consumeOneOf(OR); ok {
 		_ = p.parseLogicalAnd()
 		p.report(ParseError{tok, "Missing left-hand operand for 'or'"})
-		return &NoOpExpr{}
 	}
 
 	expr := p.parseLogicalAnd()
@@ -483,7 +482,6 @@ func (p *Parser) parseLogicalAnd() Expr {
 	if tok, ok := p.consumeOneOf(AND); ok {
 		_ = p.parseEquality()
 		p.report(ParseError{tok, "Missing left-hand operand for 'and'"})
-		return &NoOpExpr{}
 	}
 
 	expr := p.parseEquality()
@@ -503,7 +501,6 @@ func (p *Parser) parseEquality() Expr {
 		_ = p.parseComparison()
 		p.report(ParseError{tok,
 			"Missing left-hand operand for '" + tok.lexeme + "'"})
-		return &NoOpExpr{}
 	}
 
 	expr := p.parseComparison()
@@ -528,7 +525,6 @@ func (p *Parser) parseComparison() Expr {
 		_ = p.parseTerm()
 		p.report(ParseError{tok,
 			"Missing left-hand operand for '" + tok.lexeme + "'"})
-		return &NoOpExpr{}
 	}
 
 	expr := p.parseTerm()
@@ -549,7 +545,6 @@ func (p *Parser) parseTerm() Expr {
 	if tok, ok := p.consumeOneOf(PLUS); ok {
 		_ = p.parseFactor()
 		p.report(ParseError{tok, "Missing left-hand operand for '+'"})
-		return &NoOpExpr{}
 	}
 
 	expr := p.parseFactor()
@@ -568,7 +563,6 @@ func (p *Parser) parseFactor() Expr {
 		_ = p.parseUnary()
 		p.report(ParseError{tok,
 			"Missing left-hand operand for '" + tok.lexeme + "'"})
-		return &NoOpExpr{}
 	}
 
 	expr := p.parseUnary()
