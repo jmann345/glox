@@ -504,7 +504,7 @@ func (p *Parser) parseEquality() Expr {
 	}
 
 	expr := p.parseComparison()
-	// TODO: Support syntax for 'a < b < c'
+	// TODO: Support syntax for 'a == b != c'
 	for p.peekIsOneOf(BANG_EQUAL, EQUAL_EQUAL) {
 		op := p.peekAndConsume()
 		rhs := p.parseComparison()
@@ -597,29 +597,27 @@ func (p *Parser) parsePostfix() Expr {
 
 /*
  * suffix ::= primary ( "(" arguments? ")"
- *	                  | "." IDENTIFIER
- *					  | "[" logicalOr "]" )*
+ *					  | "[" logicalOr "]"
+ *	                  | "." IDENTIFIER 
+ *				      )*
  */
 func (p *Parser) parseSuffix() Expr {
 	expr := p.parsePrimary()
 
-	for repeat := true; repeat; {
+	for p.peekIsOneOf(LEFT_PAREN, LEFT_BRACKET, DOT) {
 		switch tok := p.peekAndConsume(); tok.typ {
 		case LEFT_PAREN:
 			args := p.parseArguments()
 			p.consumeToken(RIGHT_PAREN, "Expect ')' after arguments.")
 			expr = &CallExpr{expr, tok, args}
-		case DOT:
-			name := p.consumeToken(IDENTIFIER, "Expect property name after '.'")
-			expr = &Get{expr, name}
 		case LEFT_BRACKET:
 			index := p.parseLogicalOr()
 			p.consumeToken(RIGHT_BRACKET, "Expect ']' after index.")
 			expr = &Index{expr, tok, index}
-		default:
-			p.current-- // puke the last token
-			repeat = false
-		}
+		case DOT:
+			name := p.consumeToken(IDENTIFIER, "Expect property name after '.'")
+			expr = &Get{expr, name}
+		};
 	}
 
 	return expr

@@ -26,7 +26,6 @@ const (
 
 	// Assignment
 	EQUAL
-	COLON_EQUAL
 
 	// PREFIX/POSTFIX MATH OPS (ADDED)
 	MINUS_MINUS
