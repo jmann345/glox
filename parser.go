@@ -67,14 +67,12 @@ func (p *Parser) peekAndConsume() Token {
 }
 
 func (p *Parser) consumeToken(typ TokenType, message string) Token {
-	tok := p.peekToken()
-	if tok.typ == typ {
+	if tok := p.peekToken(); tok.typ == typ {
 		p.current++
+		return tok
 	} else {
 		panic(ParseError{tok, message})
 	}
-
-	return tok
 }
 
 func (p *Parser) tryConsume(typ TokenType) bool {
@@ -326,8 +324,7 @@ func (p *Parser) parseWhileStmt() Stmt {
 }
 
 // for ::= "for" ( varDecl | exprStmt | ";" ) expression? ";" expression?
-//
-//	block
+//				 block
 func (p *Parser) parseForStmt() Stmt {
 	tok := p.consumeToken(FOR, "Expect 'for' statement.")
 
@@ -356,7 +353,7 @@ func (p *Parser) parseForStmt() Stmt {
 	return &ForStmt{tok, initializer, condition, increment, body}
 }
 
-// break ::= "break;"
+// break ::= "break" ";"
 func (p *Parser) parseBreakStmt() Stmt {
 	tok := p.consumeToken(BREAK, "Expect break.")
 	p.consumeToken(SEMICOLON, "Expect ';' after 'break'.")
@@ -364,7 +361,7 @@ func (p *Parser) parseBreakStmt() Stmt {
 	return &BreakStmt{tok}
 }
 
-// cycle ::= "cycle;"
+// cycle ::= "cycle" ";"
 func (p *Parser) parseCycleStmt() Stmt {
 	tok := p.consumeToken(CYCLE, "Expect cycle.")
 	p.consumeToken(SEMICOLON, "Expect ';' after 'cycle'.")
@@ -410,9 +407,7 @@ func (p *Parser) parseComma() Expr {
 	return expr
 }
 
-// assignment ::= ternary
-//
-//	| suffix ( ( "=" | "-=" | "+=" | "/=" | "*=" ) assignment )
+// assignment ::= ternary ( ( "=" | "-=" | "+=" | "/=" | "*=" ) assignment )?
 func (p *Parser) parseAssignment() Expr {
 	expr := p.parseTernary()
 
@@ -485,9 +480,9 @@ func (p *Parser) parseTernary() Expr {
 
 // logicalOr ::= logicalAnd ( "or" logicalAnd )*
 func (p *Parser) parseLogicalOr() Expr {
-	if tok, ok := p.consumeOneOf(OR); ok {
+	if op, ok := p.consumeOneOf(OR); ok {
 		_ = p.parseLogicalAnd()
-		p.report(ParseError{tok, "Missing left-hand operand for 'or'"})
+		p.report(ParseError{op, "Missing left-hand operand for 'or'"})
 	}
 
 	expr := p.parseLogicalAnd()
@@ -503,9 +498,9 @@ func (p *Parser) parseLogicalOr() Expr {
 
 // logic_or ::= equality ( "and" equality )*
 func (p *Parser) parseLogicalAnd() Expr {
-	if tok, ok := p.consumeOneOf(AND); ok {
+	if op, ok := p.consumeOneOf(AND); ok {
 		_ = p.parseEquality()
-		p.report(ParseError{tok, "Missing left-hand operand for 'and'"})
+		p.report(ParseError{op, "Missing left-hand operand for 'and'"})
 	}
 
 	expr := p.parseEquality()
@@ -521,10 +516,10 @@ func (p *Parser) parseLogicalAnd() Expr {
 
 // equality ::= comparison ( ('!=' | '==') comparison )*
 func (p *Parser) parseEquality() Expr {
-	if tok, ok := p.consumeOneOf(BANG_EQUAL, EQUAL_EQUAL); ok {
+	if op, ok := p.consumeOneOf(BANG_EQUAL, EQUAL_EQUAL); ok {
 		_ = p.parseComparison()
-		p.report(ParseError{tok,
-			"Missing left-hand operand for '" + tok.lexeme + "'"})
+		p.report(ParseError{op,
+			"Missing left-hand operand for '" + op.lexeme + "'"})
 	}
 
 	expr := p.parseComparison()
@@ -540,15 +535,16 @@ func (p *Parser) parseEquality() Expr {
 
 // comparison ::= term ( ( '>' | '>=' | '<' | '<=' ) term )*
 func (p *Parser) parseComparison() Expr {
-	// if (tok := self.peekToken()) in (
+	// The python syntax for this looks cool too:
+	// if (op := self.peekToken()) in (
 	//     GREATER, GREATER_EQUAL, LESS, LESS_EQUAL
 	// ): ...
-	if tok, ok := p.consumeOneOf(
+	if op, ok := p.consumeOneOf(
 		GREATER, GREATER_EQUAL, LESS, LESS_EQUAL,
 	); ok {
 		_ = p.parseTerm()
-		p.report(ParseError{tok,
-			"Missing left-hand operand for '" + tok.lexeme + "'"})
+		p.report(ParseError{op,
+			"Missing left-hand operand for '" + op.lexeme + "'"})
 	}
 
 	expr := p.parseTerm()
@@ -566,9 +562,9 @@ func (p *Parser) parseComparison() Expr {
 
 // term ::= factor ( ( '-' | '+' ) factor )*
 func (p *Parser) parseTerm() Expr {
-	if tok, ok := p.consumeOneOf(PLUS); ok {
+	if op, ok := p.consumeOneOf(PLUS); ok {
 		_ = p.parseFactor()
-		p.report(ParseError{tok, "Missing left-hand operand for '+'"})
+		p.report(ParseError{op, "Missing left-hand operand for '+'"})
 	}
 
 	expr := p.parseFactor()
@@ -583,10 +579,10 @@ func (p *Parser) parseTerm() Expr {
 
 // factor ::= unary ( ( '*' | '/' ) unary )*
 func (p *Parser) parseFactor() Expr {
-	if tok, ok := p.consumeOneOf(STAR, SLASH); ok {
+	if op, ok := p.consumeOneOf(STAR, SLASH); ok {
 		_ = p.parseUnary()
-		p.report(ParseError{tok,
-			"Missing left-hand operand for '" + tok.lexeme + "'"})
+		p.report(ParseError{op,
+			"Missing left-hand operand for '" + op.lexeme + "'"})
 	}
 
 	expr := p.parseUnary()
