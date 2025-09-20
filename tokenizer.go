@@ -298,7 +298,7 @@ func (t *Tokenizer) scanIdentifierOrKeyword() {
 func (t *Tokenizer) scanComment() error {
 	// We don't add any tokens for comments!
 	// Block comment #[ ... ]#
-	if t.current <  len(t.source) && t.peekAndConsume("[") {
+	if t.current < len(t.source) && t.peekAndConsume("[") {
 		terminated := t.peekAndConsume("]#")
 		for t.current < len(t.source) && !terminated {
 			if t.source[t.current] == '\n' {

@@ -28,7 +28,6 @@ func NewParser(tokens []Token) *Parser {
 	return &Parser{tokens, 0, false}
 }
 
-
 func (p *Parser) IsAtEnd() bool {
 	return p.peekToken().typ == EOF
 }
@@ -82,7 +81,7 @@ func (p *Parser) tryConsume(typ TokenType) bool {
 	if p.peekToken().typ == typ {
 		p.current++
 		return true
-	} 
+	}
 
 	return false
 }
@@ -112,18 +111,18 @@ func (p *Parser) synchronize() {
 
 // declaration ::= classDecl | funDecl | varDecl | statement
 func (p *Parser) parseDeclaration() (stmt Stmt) {
-    defer func() {
-        if r := recover(); r != nil {
+	defer func() {
+		if r := recover(); r != nil {
 			p.HadError = true
-            if err, ok := r.(ParseError); ok {
+			if err, ok := r.(ParseError); ok {
 				p.report(err)
-                p.synchronize()
+				p.synchronize()
 				stmt = &NoOpStmt{}
-            } else {
-                panic(r) // real panic, let it crash
-            }
-        }
-    }()
+			} else {
+				panic(r) // real panic, let it crash
+			}
+		}
+	}()
 
 	switch p.peekToken().typ {
 	case CLASS:
@@ -327,7 +326,8 @@ func (p *Parser) parseWhileStmt() Stmt {
 }
 
 // for ::= "for" ( varDecl | exprStmt | ";" ) expression? ";" expression?
-//				 block
+//
+//	block
 func (p *Parser) parseForStmt() Stmt {
 	tok := p.consumeToken(FOR, "Expect 'for' statement.")
 
@@ -598,7 +598,7 @@ func (p *Parser) parsePostfix() Expr {
 /*
  * suffix ::= primary ( "(" arguments? ")"
  *					  | "[" logicalOr "]"
- *	                  | "." IDENTIFIER 
+ *	                  | "." IDENTIFIER
  *				      )*
  */
 func (p *Parser) parseSuffix() Expr {
@@ -617,7 +617,7 @@ func (p *Parser) parseSuffix() Expr {
 		case DOT:
 			name := p.consumeToken(IDENTIFIER, "Expect property name after '.'")
 			expr = &Get{expr, name}
-		};
+		}
 	}
 
 	return expr
