@@ -599,7 +599,6 @@ func (r *Resolver) resSetExpr(expr *Set) error {
 		return err
 	}
 
-
 	return nil
 }
 

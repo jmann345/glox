@@ -352,7 +352,6 @@ func (i *Interpreter) assignVariable(
 }
 
 func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
-
 	// NOTE: I chose to only make 'false' falsey
 	switch expr.op.typ {
 	case NOT:
@@ -388,12 +387,12 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 	default: // ++/--: Update the value of the variable, return the new value
 		switch e := expr.rhs.(type) {
 		case *Variable:
-			lhs, err := i.lookUpVariable(e.name, e)
+			rhs, err := i.lookUpVariable(e.name, e)
 			if err != nil {
 				return nil, err
 			}
 
-			val, ok := lhs.(float64)
+			val, ok := rhs.(float64)
 			if !ok {
 				return nil, RuntimeError{
 					tok: expr.op,
@@ -860,6 +859,7 @@ func (i *Interpreter) evalLogical(expr *Binary) (any, error) {
 		}
 	}
 
+	// Try to short circuit
 	if expr.op.typ == OR && lhs_b {
 		return true, nil 
 	}
@@ -1133,8 +1133,6 @@ func (i *Interpreter) evalTernary(expr *Ternary) (any, error) {
 		}
 	}
 
-	// NOTE: For now, an if expression can i.evaluate to different types
-	// NOTE: Errors in the non-traveled branch won't be reported
 	if condVal {
 		return i.evaluate(expr.trueBranch)
 	} else {
