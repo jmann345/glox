@@ -63,3 +63,48 @@ func SameType(lhs, rhs any) bool {
 		panic("Unreachable.")
 	}
 }
+
+func DoMath(op Token, lhs, rhs any) (any, error) {
+	if !SameType(lhs, rhs) {
+		return nil, RuntimeError{
+			tok: op,
+			msg: fmt.Sprintf(
+				"Incompatible types: %T and %T", lhs, rhs,
+			),
+		}
+	}
+
+	// Currently, the only overloaded op is '+' for string concatenation
+	if lhs, ok := lhs.(string); ok {
+		if op.typ != PLUS {
+			return nil, RuntimeError{op, fmt.Sprintf(
+				"'%s' operands must be both be numbers or strings.",
+				op.lexeme,
+			)}
+		}
+
+		rhs, _ := rhs.(string)
+		return lhs + rhs, nil
+	}
+
+	lhs_n, ok := lhs.(float64)
+	rhs_n, _ := rhs.(float64)
+	if !ok {
+		return nil, RuntimeError{op,
+			fmt.Sprintf("Invalid math operand type: %T", lhs),
+		}
+	}
+
+	switch op.typ {
+	case PLUS:
+		return lhs_n + rhs_n, nil
+	case MINUS:
+		return lhs_n - rhs_n, nil
+	case STAR:
+		return lhs_n * rhs_n, nil
+	case SLASH:
+		return lhs_n / rhs_n, nil
+	}
+
+	panic("Unreachable.")
+}

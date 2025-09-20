@@ -411,6 +411,10 @@ func (r *Resolver) resolveExpr(expr Expr) error {
 	switch e := expr.(type) {
 	case *Assign:
 		return r.resAssignExpr(e)
+	case *AugSet:
+		return r.resAugSetExpr(e)
+	case *AugSetIndex:
+		return r.resAugSetIndexExpr(e)
 	case *Binary:
 		return r.resBinaryExpr(e)
 	case *CallExpr:
@@ -423,8 +427,6 @@ func (r *Resolver) resolveExpr(expr Expr) error {
 		return r.resGroupingExpr(e)
 	case *Index:
 		return r.resIndexExpr(e)
-	case *IfExpr:
-		return r.resIfExpr(e)
 	case *List:
 		return r.resListExpr(e)
 	case *Literal, *NoOpExpr:
@@ -435,6 +437,8 @@ func (r *Resolver) resolveExpr(expr Expr) error {
 		return r.resSetExpr(e)
 	case *SetIndex:
 		return r.resSetIndexExpr(e)
+	case *Ternary:
+		return r.resTernary(e)
 	case *This:
 		return r.resThisExpr(e)
 	case *Unary:
@@ -466,6 +470,35 @@ func (r *Resolver) resAssignExpr(expr *Assign) error {
 	}
 
 	r.resolveLocal(expr, expr.name, false)
+	return nil
+}
+
+func (r *Resolver) resAugSetExpr(expr *AugSet) error {
+	if err := r.resolveExpr(expr.object); err != nil {
+		return err
+	}
+
+	if err := r.resolveExpr(expr.rhs); err != nil {
+		return err
+	}
+
+
+	return nil
+}
+
+func (r *Resolver) resAugSetIndexExpr(expr *AugSetIndex) error {
+	if err := r.resolveExpr(expr.list); err != nil {
+		return err
+	}
+
+	if err := r.resolveExpr(expr.index); err != nil {
+		return err
+	}
+
+	if err := r.resolveExpr(expr.rhs); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -543,24 +576,6 @@ func (r *Resolver) resIndexExpr(expr *Index) error {
 	return r.resolveExpr(expr.index)
 }
 
-func (r *Resolver) resIfExpr(expr *IfExpr) error {
-	if err := r.resolveExpr(expr.condition); err != nil {
-		return err
-	}
-
-	if err := r.resolveExpr(expr.thenBranch); err != nil {
-		return err
-	}
-
-	if expr.elseBranch != nil {
-		if err := r.resolveExpr(expr.elseBranch); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (r *Resolver) resListExpr(expr *List) error {
 	for _, value := range expr.values {
 		if err := r.resolveExpr(value); err != nil {
@@ -576,13 +591,14 @@ func (r *Resolver) resPostfixExpr(expr *Postfix) error {
 }
 
 func (r *Resolver) resSetExpr(expr *Set) error {
+	if err := r.resolveExpr(expr.object); err != nil {
+		return err
+	}
+
 	if err := r.resolveExpr(expr.value); err != nil {
 		return err
 	}
 
-	if err := r.resolveExpr(expr.object); err != nil {
-		return err
-	}
 
 	return nil
 }
@@ -598,6 +614,24 @@ func (r *Resolver) resSetIndexExpr(expr *SetIndex) error {
 
 	if err := r.resolveExpr(expr.value); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (r *Resolver) resTernary(expr *Ternary) error {
+	if err := r.resolveExpr(expr.condition); err != nil {
+		return err
+	}
+
+	if err := r.resolveExpr(expr.trueBranch); err != nil {
+		return err
+	}
+
+	if expr.falseBranch != nil {
+		if err := r.resolveExpr(expr.falseBranch); err != nil {
+			return err
+		}
 	}
 
 	return nil

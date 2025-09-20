@@ -44,6 +44,10 @@ const (
 	GREATER
 	GREATER_EQUAL
 
+	// Ternary operators
+	COLON
+	QUESTION_MARK
+
 	// Boolean keywords
 	// NOTE: Lox officially uses BANG instead of NOT
 	NOT

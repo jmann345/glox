@@ -108,17 +108,18 @@ func (g Get) String() string {
 	return parenthesize(g.name.lexeme, g.object)
 }
 
-type IfExpr struct {
-	token      Token
-	condition  Expr
-	thenBranch Expr
-	elseBranch Expr
+type Ternary struct {
+	token       Token
+	condition   Expr
+	trueBranch  Expr
+	falseBranch Expr
 }
 
-func (IfExpr) isExpr() {}
-func (i IfExpr) String() string {
+func (Ternary) isExpr() {}
+func (t Ternary) String() string {
 	return parenthesize(
-		"if "+i.condition.String(), i.thenBranch, i.elseBranch)
+		t.condition.String() + " ?", t.trueBranch, t.falseBranch,
+	)
 }
 
 type Index struct {
@@ -205,6 +206,31 @@ type SetIndex struct {
 func (SetIndex) isExpr() {}
 func (s SetIndex) String() string {
 	return parenthesize("set", s.list, s.index, s.value)
+}
+
+type AugSet struct {
+	object Expr
+	name   Token
+	op 	   Token
+	rhs    Expr
+}
+
+func (AugSet) isExpr() {}
+func (a AugSet) String() string {
+	return parenthesize(a.name.lexeme + a.op.lexeme, a.object, a.rhs)
+}
+
+type AugSetIndex struct {
+	list    Expr
+	bracket Token
+	index   Expr
+	op 	    Token
+	rhs   	Expr
+}
+
+func (AugSetIndex) isExpr() {}
+func (a AugSetIndex) String() string {
+	return parenthesize("set" + a.op.lexeme, a.list, a.index, a.rhs)
 }
 
 type This struct {

@@ -1,0 +1,42 @@
+# postfix / prefix with index side effects
+var i = 0;
+var a = [10, 20];
+a[i++]++;
+print "Expect 20";
+print i, a[0], a[1];
+++a[i++];           
+print "Expect 21";
+print i, a[0], a[1];
+
+# aug-assign with index side effects
+i = 0; a = [10, 20];
+print "Expect 20";
+a[i++] += 2;        print i, a[0], a[1];
+print "Expect 80";
+a[i++] *= (i += 3); print i, a[0], a[1];
+
+class C { init(){ this.x = 1; } }
+var c = C();
+c.x += 4;
+print "Expect 5";
+print c.x;
+
+fun sideEffect(msg, ret) {
+  print msg;
+  return ret;
+}
+
+print "oops-and should NOT print below due to short circuit";
+false and sideEffect("oops-and", true);
+print "oops-or should NOT print below due to short circuit";
+true  or  sideEffect("oops-or",  false);
+
+print "But these should print!";
+true  and sideEffect("ran-and",  true);
+false or  sideEffect("ran-or",   true);
+
+var k = 0;
+fun f(x,y){ print x,y; }
+var t = [ (k=1), (k+=2) ];
+print "Expect 4";
+f( t[k-2], (k+=1) );

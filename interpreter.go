@@ -289,8 +289,6 @@ func (i *Interpreter) evaluate(expr Expr) (any, error) {
 		return i.evalBinary(e)
 	case *CallExpr:
 		return i.evalCall(e)
-	case *IfExpr:
-		return i.evalIfExpr(e)
 	case *Index:
 		return i.evalIndex(e)
 	case *List:
@@ -301,6 +299,12 @@ func (i *Interpreter) evaluate(expr Expr) (any, error) {
 		return i.evalSet(e)
 	case *SetIndex:
 		return i.evalSetIndex(e)
+	case *AugSet:
+		return i.evalAugSet(e)
+	case *AugSetIndex:
+		return i.evalAugSetIndex(e)
+	case *Ternary:
+		return i.evalTernary(e)
 	case *This:
 		return i.lookUpVariable(e.keyword, expr)
 	case *Grouping:
@@ -348,15 +352,16 @@ func (i *Interpreter) assignVariable(
 }
 
 func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
-	rhs, err := i.evaluate(expr.rhs)
-	if err != nil {
-		return nil, err
-	}
 
 	// NOTE: I chose to only make 'false' falsey
 	switch expr.op.typ {
 	case NOT:
-		rhs, ok := rhs.(bool)
+		value, err := i.evaluate(expr.rhs)
+		if err != nil {
+			return nil, err
+		}
+
+		val, ok := value.(bool)
 		if !ok {
 			return nil, RuntimeError{
 				tok: expr.op,
@@ -364,9 +369,14 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 			}
 		}
 
-		return !rhs, nil
+		return !val, nil
 	case MINUS:
-		rhs, ok := rhs.(float64)
+		value, err := i.evaluate(expr.rhs)
+		if err != nil {
+			return nil, err
+		}
+
+		val, ok := value.(float64)
 		if !ok {
 			return nil, RuntimeError{
 				tok: expr.op,
@@ -374,18 +384,16 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 			}
 		}
 
-		return -rhs, nil
+		return -val, nil
 	default: // ++/--: Update the value of the variable, return the new value
 		switch e := expr.rhs.(type) {
 		case *Variable:
-			key := e.name.lexeme
-			if _, ok := i.env.Get(key); !ok {
-				return nil, RuntimeError{e.name,
-					"Use of undeclared identifier '" + key + "'",
-				}
+			lhs, err := i.lookUpVariable(e.name, e)
+			if err != nil {
+				return nil, err
 			}
 
-			val, ok := rhs.(float64)
+			val, ok := lhs.(float64)
 			if !ok {
 				return nil, RuntimeError{
 					tok: expr.op,
@@ -396,14 +404,13 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 			switch expr.op.typ {
 			case MINUS_MINUS:
 				val--
-				i.env.SetInScope(key, val)
 			case PLUS_PLUS:
 				val++
-				i.env.SetInScope(key, val)
 			default:
 				panic("Unreachable.")
 			}
 
+			i.env.SetInScope(e.name.lexeme, val)
 			return val, nil
 		case *Index:
 			list, err := i.evaluate(e.list)
@@ -413,7 +420,7 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 
 			lst, ok := list.([]any)
 			if !ok {
-				return nil, &RuntimeError{
+				return nil, RuntimeError{
 					e.bracket,
 					"Subscripted value is not a list.",
 				}
@@ -424,25 +431,27 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 				return nil, err
 			}
 
-			idx, ok := index.(float64)
-			if !ok {
-				return nil, &RuntimeError{
+			var idx int
+			if index, ok := index.(float64); !ok {
+				return nil, RuntimeError{
 					e.bracket,
 					"List subscript is not a number.",
 				}
+			} else {
+				idx = int(index)
 			}
 
-			if int(idx) >= len(lst) {
-				return nil, &RuntimeError{
+			if idx < 0 || idx >= len(lst) {
+				return nil, RuntimeError{
 					e.bracket,
 					fmt.Sprintf(
 						"Index out of range [%v] with length %v.",
-						int(idx), len(lst),
+						idx, len(lst),
 					),
 				}
 			}
 
-			val, ok := rhs.(float64)
+			val, ok := lst[idx].(float64)
 			if !ok {
 				return nil, RuntimeError{
 					tok: expr.op,
@@ -453,14 +462,13 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 			switch expr.op.typ {
 			case MINUS_MINUS:
 				val--
-				lst[int(idx)] = val
 			case PLUS_PLUS:
 				val++
-				lst[int(idx)] = val
 			default:
 				panic("Unreachable.")
 			}
 
+			lst[idx] = val
 			return val, nil
 		case *Get:
 			object, err := i.evaluate(e.object)
@@ -468,33 +476,40 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 				return nil, err
 			}
 
-			if obj, ok := object.(Object); ok {
-				val, ok := rhs.(float64)
-				if !ok {
-					return nil, RuntimeError{
-						expr.op,
-						"'" + expr.op.lexeme + "' operand must be a number",
-					}
+			obj, ok := object.(Object)
+			if !ok {
+				return nil, RuntimeError{expr.op,
+					"'" + expr.op.lexeme + "' target must be an object property",
 				}
-
-				switch expr.op.typ {
-				case MINUS_MINUS:
-					val--
-					obj.Set(e.name, val)
-				case PLUS_PLUS:
-					val++
-					obj.Set(e.name, val)
-				default:
-					panic("Unreachable.")
-				}
-
-				return val, nil
 			}
 
-			return nil, RuntimeError{
-				tok: expr.op,
-				msg: "'" + expr.op.lexeme + "' target must be an object property",
+			value, err := obj.Get(e.name)
+			if err != nil {
+				return nil, err
 			}
+
+			val, ok := value.(float64)
+			if !ok {
+				return nil, RuntimeError{
+					tok: expr.op,
+					msg: "'" + expr.op.lexeme + "' operand must be a number",
+				}
+			}
+
+			switch expr.op.typ {
+			case MINUS_MINUS:
+				val--
+			case PLUS_PLUS:
+				val++
+			default:
+				panic("Unreachable.")
+			}
+
+			if err := obj.Set(e.name, val); err != nil {
+				return nil, err
+			}
+
+			return val, nil
 		default:
 			return nil, RuntimeError{
 				tok: expr.op,
@@ -505,18 +520,11 @@ func (i *Interpreter) evalUnary(expr *Unary) (any, error) {
 }
 
 func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
-	lhs, err := i.evaluate(expr.lhs)
-	if err != nil {
-		return nil, err
-	}
-
 	switch e := expr.lhs.(type) {
 	case *Variable:
-		key := e.name.lexeme
-		if _, ok := i.env.Get(key); !ok {
-			return nil, RuntimeError{e.name,
-				"Use of undeclared identifier '" + key + "'",
-			}
+		lhs, err := i.lookUpVariable(e.name, e)
+		if err != nil {
+			return nil, err
 		}
 
 		val, ok := lhs.(float64)
@@ -529,9 +537,9 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 
 		switch expr.op.typ {
 		case MINUS_MINUS:
-			i.env.SetInScope(key, val-1)
+			i.env.SetInScope(e.name.lexeme, val-1)
 		case PLUS_PLUS:
-			i.env.SetInScope(key, val+1)
+			i.env.SetInScope(e.name.lexeme, val+1)
 		default:
 			panic("Unreachable.")
 		}
@@ -545,7 +553,7 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 
 		lst, ok := list.([]any)
 		if !ok {
-			return nil, &RuntimeError{
+			return nil, RuntimeError{
 				e.bracket,
 				"Subscripted value is not a list.",
 			}
@@ -556,25 +564,27 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 			return nil, err
 		}
 
-		idx, ok := index.(float64)
-		if !ok {
-			return nil, &RuntimeError{
+		var idx int
+		if index, ok := index.(float64); !ok {
+			return nil, RuntimeError{
 				e.bracket,
 				"List subscript is not a number.",
 			}
+		} else {
+			idx = int(index)
 		}
 
-		if int(idx) >= len(lst) {
-			return nil, &RuntimeError{
+		if idx < 0 || idx >= len(lst) {
+			return nil, RuntimeError{
 				e.bracket,
 				fmt.Sprintf(
 					"Index out of range [%v] with length %v.",
-					int(idx), len(lst),
+					idx, len(lst),
 				),
 			}
 		}
 
-		val, ok := lst[int(idx)].(float64)
+		val, ok := lst[idx].(float64)
 		if !ok {
 			return nil, RuntimeError{
 				tok: expr.op,
@@ -584,9 +594,9 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 
 		switch expr.op.typ {
 		case MINUS_MINUS:
-			lst[int(idx)] = val - 1
+			lst[idx] = val - 1
 		case PLUS_PLUS:
-			lst[int(idx)] = val + 1
+			lst[idx] = val + 1
 		default:
 			panic("Unreachable.")
 		}
@@ -598,31 +608,40 @@ func (i *Interpreter) evalPostfix(expr *Postfix) (any, error) {
 			return nil, err
 		}
 
-		if obj, ok := object.(Object); ok {
-			val, ok := lhs.(float64)
-			if !ok {
-				return nil, RuntimeError{
-					tok: expr.op,
-					msg: "'" + expr.op.lexeme + "' operand must be a number",
-				}
+		obj, ok := object.(Object)
+		if !ok {
+			return nil, RuntimeError{expr.op,
+				"'" + expr.op.lexeme + "' target must be an object property",
 			}
-
-			switch expr.op.typ {
-			case MINUS_MINUS:
-				obj.Set(e.name, val-1)
-			case PLUS_PLUS:
-				obj.Set(e.name, val+1)
-			default:
-				panic("Unreachable.")
-			}
-
-			return val, nil
 		}
 
-		return nil, RuntimeError{
-			tok: expr.op,
-			msg: "'" + expr.op.lexeme + "' target must be an object property",
+		value, err := obj.Get(e.name)
+		if err != nil {
+			return nil, err
 		}
+
+		val, ok := value.(float64)
+		if !ok {
+			return nil, RuntimeError{
+				tok: expr.op,
+				msg: "'" + expr.op.lexeme + "' operand must be a number",
+			}
+		}
+
+		switch expr.op.typ {
+		case MINUS_MINUS:
+			if err := obj.Set(e.name, val-1); err != nil {
+				return nil, err
+			}
+		case PLUS_PLUS:
+			if err := obj.Set(e.name, val+1); err != nil {
+				return nil, err
+			}
+		default:
+			panic("Unreachable.")
+		}
+
+		return val, nil
 	default:
 		return nil, RuntimeError{
 			tok: expr.op,
@@ -824,52 +843,7 @@ func (i *Interpreter) evalMath(expr *Binary) (any, error) {
 		return nil, err
 	}
 
-	if !SameType(lhs, rhs) {
-		return nil, RuntimeError{
-			tok: expr.op,
-			msg: fmt.Sprintf(
-				"Incompatible types: %T and %T", lhs, rhs,
-			),
-		}
-	}
-
-	// Currently, the only overloaded op is '+' for string concatenation
-	if lhs, ok := lhs.(string); ok {
-		if expr.op.typ != PLUS {
-			return nil, RuntimeError{
-				expr.op,
-				fmt.Sprintf(
-					"'%s' operands must be both be numbers or strings.",
-					expr.op.lexeme,
-				),
-			}
-		}
-
-		rhs, _ := rhs.(string)
-		return lhs + rhs, nil
-	}
-
-	lhs_n, ok := lhs.(float64)
-	rhs_n, _ := rhs.(float64)
-	if !ok {
-		return nil, RuntimeError{
-			expr.op,
-			fmt.Sprintf("Invalid math operand type: %T", lhs),
-		}
-	}
-
-	switch expr.op.typ {
-	case PLUS:
-		return lhs_n + rhs_n, nil
-	case MINUS:
-		return lhs_n - rhs_n, nil
-	case STAR:
-		return lhs_n * rhs_n, nil
-	case SLASH:
-		return lhs_n / rhs_n, nil
-	}
-
-	panic("Unreachable.")
+	return DoMath(expr.op, lhs, rhs)
 }
 
 func (i *Interpreter) evalLogical(expr *Binary) (any, error) {
@@ -878,26 +852,32 @@ func (i *Interpreter) evalLogical(expr *Binary) (any, error) {
 		return nil, err
 	}
 
+	lhs_b, ok := lhs.(bool)
+	if !ok {
+		return nil, RuntimeError{
+			expr.op,
+			fmt.Sprintf("Invalid logical operand type: %T", lhs),
+		}
+	}
+
+	if expr.op.typ == OR && lhs_b {
+		return true, nil 
+	}
+
+	if expr.op.typ == AND && !lhs_b {
+		return false, nil
+	}
+
 	rhs, err := i.evaluate(expr.rhs)
 	if err != nil {
 		return nil, err
 	}
 
-	if !SameType(lhs, rhs) {
-		return nil, RuntimeError{
-			tok: expr.op,
-			msg: fmt.Sprintf(
-				"Incompatible types: %T and %T", lhs, rhs,
-			),
-		}
-	}
-
-	lhs_b, ok := lhs.(bool)
-	rhs_b, _ := rhs.(bool)
+	rhs_b, ok := rhs.(bool)
 	if !ok {
 		return nil, RuntimeError{
 			expr.op,
-			fmt.Sprintf("Invalid logical operand type: %T", lhs),
+			fmt.Sprintf("Invalid logical operand type: %T", rhs),
 		}
 	}
 
@@ -911,29 +891,6 @@ func (i *Interpreter) evalLogical(expr *Binary) (any, error) {
 	panic("Unreachable.")
 }
 
-func (i *Interpreter) evalIfExpr(expr *IfExpr) (any, error) {
-	cond, err := i.evaluate(expr.condition)
-	if err != nil {
-		return nil, err
-	}
-
-	condVal, ok := cond.(bool)
-	if !ok {
-		return nil, RuntimeError{
-			expr.token,
-			"Condition of 'if' must be boolean.",
-		}
-	}
-
-	// NOTE: For now, an if expression can i.evaluate to different types
-	// NOTE: Errors in the non-traveled branch won't be reported
-	if condVal {
-		return i.evaluate(expr.thenBranch)
-	} else {
-		return i.evaluate(expr.elseBranch)
-	}
-}
-
 func (i *Interpreter) evalIndex(expr *Index) (any, error) {
 	list, err := i.evaluate(expr.list)
 	if err != nil {
@@ -942,7 +899,7 @@ func (i *Interpreter) evalIndex(expr *Index) (any, error) {
 
 	lst, ok := list.([]any)
 	if !ok {
-		return nil, &RuntimeError{
+		return nil, RuntimeError{
 			expr.bracket,
 			"Subscripted value is not a list.",
 		}
@@ -953,25 +910,27 @@ func (i *Interpreter) evalIndex(expr *Index) (any, error) {
 		return nil, err
 	}
 
-	idx, ok := index.(float64)
-	if !ok {
-		return nil, &RuntimeError{
+	var idx int
+	if index, ok := index.(float64); !ok {
+		return nil, RuntimeError{
 			expr.bracket,
 			"List subscript is not a number.",
 		}
+	} else {
+		idx = int(index)
 	}
 
-	if int(idx) >= len(lst) {
-		return nil, &RuntimeError{
+	if idx < 0 || idx >= len(lst) {
+		return nil, RuntimeError{
 			expr.bracket,
 			fmt.Sprintf(
 				"Index out of range [%v] with length %v.",
-				int(idx), len(lst),
+				idx, len(lst),
 			),
 		}
 	}
 
-	return lst[int(idx)], nil
+	return lst[idx], nil
 }
 
 func (i *Interpreter) evalList(expr *List) ([]any, error) {
@@ -1007,20 +966,21 @@ func (i *Interpreter) evalSet(expr *Set) (any, error) {
 		return nil, err
 	}
 
-	if obj, ok := object.(Object); ok {
-		value, err := i.evaluate(expr.value)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := obj.Set(expr.name, value); err != nil {
-			return nil, err
-		}
-
-		return value, nil
+	obj, ok := object.(Object)
+	if !ok {
+		return nil, RuntimeError{expr.name, "Only objects have fields."}
 	}
 
-	return nil, RuntimeError{expr.name, "Only objects have fields."}
+	value, err := i.evaluate(expr.value)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := obj.Set(expr.name, value); err != nil {
+		return nil, err
+	}
+
+	return value, nil
 }
 
 func (i *Interpreter) evalSetIndex(expr *SetIndex) (any, error) {
@@ -1029,42 +989,156 @@ func (i *Interpreter) evalSetIndex(expr *SetIndex) (any, error) {
 		return nil, err
 	}
 
-	if lst, ok := list.([]any); ok {
-		index, err := i.evaluate(expr.index)
-		if err != nil {
-			return nil, err
+	lst, ok := list.([]any)
+	if !ok {
+		return nil, RuntimeError{
+			expr.bracket,
+			"Subscripted value is not a list.",
 		}
-
-		idx, ok := index.(float64)
-		if !ok {
-			return nil, &RuntimeError{
-				expr.bracket,
-				"List subscript is not a number.",
-			}
-		}
-
-		if int(idx) >= len(lst) {
-			return nil, &RuntimeError{
-				expr.bracket,
-				fmt.Sprintf(
-					"Index out of range [%v] with length %v.",
-					int(idx), len(lst),
-				),
-			}
-		}
-
-		value, err := i.evaluate(expr.value)
-		if err != nil {
-			return nil, err
-		}
-
-		lst[int(idx)] = value
-
-		return value, nil
 	}
 
-	return nil, RuntimeError{
-		expr.bracket,
-		"Subscripted value is not a list.",
+	index, err := i.evaluate(expr.index)
+	if err != nil {
+		return nil, err
+	}
+
+	var idx int
+	if index, ok := index.(float64); !ok {
+		return nil, RuntimeError{
+			expr.bracket,
+			"List subscript is not a number.",
+		}
+	} else {
+		idx = int(index)
+	}
+
+	if idx < 0 || idx >= len(lst) {
+		return nil, RuntimeError{
+			expr.bracket,
+			fmt.Sprintf(
+				"Index out of range [%v] with length %v.",
+				idx, len(lst),
+			),
+		}
+	}
+
+	value, err := i.evaluate(expr.value)
+	if err != nil {
+		return nil, err
+	}
+
+	lst[idx] = value
+
+	return value, nil
+}
+
+func (i *Interpreter) evalAugSet(expr *AugSet) (any, error) {
+	object, err := i.evaluate(expr.object)
+	if err != nil {
+		return nil, err
+	}
+
+	obj, ok := object.(Object); 
+	if !ok {
+		return nil, RuntimeError{expr.name, "Only objects have fields."}
+	}
+	
+	rhs, err := i.evaluate(expr.rhs)
+	if err != nil {
+		return nil, err
+	}
+
+	val, err := obj.Get(expr.name)
+	if err != nil {
+		return nil, err
+	}
+
+	newVal, err := DoMath(expr.op, val, rhs)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := obj.Set(expr.name, newVal); err != nil {
+		return nil, err
+	}
+
+	return newVal, nil
+}
+
+func (i *Interpreter) evalAugSetIndex(expr *AugSetIndex) (any, error) {
+	list, err := i.evaluate(expr.list)
+	if err != nil {
+		return nil, err
+	}
+
+	lst, ok := list.([]any)
+	if !ok {
+		return nil, RuntimeError{
+			expr.bracket,
+			"Subscripted value is not a list.",
+		}
+	}
+
+	index, err := i.evaluate(expr.index)
+	if err != nil {
+		return nil, err
+	}
+
+	var idx int
+	if index, ok := index.(float64); !ok {
+		return nil, RuntimeError{
+			expr.bracket,
+			"List subscript is not a number.",
+		}
+	} else {
+		idx = int(index)
+	}
+
+	if idx < 0 || idx >= len(lst) {
+		return nil, RuntimeError{
+			expr.bracket,
+			fmt.Sprintf(
+				"Index out of range [%v] with length %v.",
+				idx, len(lst),
+			),
+		}
+	}
+
+	rhs, err := i.evaluate(expr.rhs)
+	if err != nil {
+		return nil, err
+	}
+
+	newValue, err := DoMath(expr.op, lst[idx], rhs)
+	if err != nil {
+		return nil, err
+	}
+
+	lst[idx] = newValue
+
+	return newValue, nil
+}
+
+func (i *Interpreter) evalTernary(expr *Ternary) (any, error) {
+	cond, err := i.evaluate(expr.condition)
+	if err != nil {
+		return nil, err
+	}
+
+	condVal, ok := cond.(bool)
+	if !ok {
+		return nil, RuntimeError{
+			expr.token,
+			"Condition of ternary must be boolean.",
+		}
+	}
+
+	// NOTE: For now, an if expression can i.evaluate to different types
+	// NOTE: Errors in the non-traveled branch won't be reported
+	if condVal {
+		return i.evaluate(expr.trueBranch)
+	} else {
+		return i.evaluate(expr.falseBranch)
 	}
 }
+

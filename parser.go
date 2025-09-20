@@ -386,15 +386,33 @@ func (p *Parser) parseReturnStmt() Stmt {
 
 // expression ::= assignment
 func (p *Parser) parseExpression() Expr {
-	return p.parseAssignment()
+	return p.parseComma()
 }
 
-/* assignment ::= comma
- *	            | call ( ( "=" assignment )
- *				| ( ( "-=" | "+=" | "/=" | "*=" ) expression ) )
- */
+// CHALLENGE 1: Add comma (easy)
+// comma ::= assignment ( , assignment )*
+func (p *Parser) parseComma() Expr {
+	if tok, ok := p.consumeOneOf(COMMA); ok {
+		_ = p.parseAssignment()
+		p.report(ParseError{tok, "Missing left-hand operand for ','"})
+		return &NoOpExpr{}
+	}
+
+	expr := p.parseAssignment()
+
+	for op := p.peekToken(); op.typ == COMMA; op = p.peekToken() {
+		p.current++
+		rhs := p.parseAssignment()
+		expr = &Binary{expr, op, rhs}
+	}
+
+	return expr
+}
+
+// assignment ::= ternary
+//	            | suffix ( ( "=" | "-=" | "+=" | "/=" | "*=" ) assignment )
 func (p *Parser) parseAssignment() Expr {
-	expr := p.parseComma()
+	expr := p.parseTernary()
 
 	if tok := p.peekToken(); tok.typ == EQUAL {
 		p.current++ // consume '='
@@ -415,42 +433,49 @@ func (p *Parser) parseAssignment() Expr {
 
 	if tok, ok := p.consumeOneOf(
 		MINUS_EQUAL, PLUS_EQUAL, SLASH_EQUAL, STAR_EQUAL,
-	); ok { // Desugar lhs .= rhs into lhs = lhs . rhs
+	); ok {
 		op := tok.UnderlyingOp()
-
-		rhs := p.parseExpression()
+		rhs := p.parseAssignment()
 
 		switch e := expr.(type) {
-		case *Variable:
+		case *Variable: // Desugar lhs .= rhs into lhs = lhs . rhs
 			return &Assign{e.name, &Binary{e, op, rhs}}
 		case *Index:
-			return &SetIndex{e.list, e.bracket, e.index, &Binary{e, op, rhs}}
+			return &AugSetIndex{e.list, e.bracket, e.index, op, rhs}
 		case *Get:
-			return &Set{e.object, e.name, &Binary{e, op, rhs}}
+			return &AugSet{e.object, e.name, op, rhs}
 		default:
-			p.report(ParseError{tok, "Invalid assignment target."})
+			p.report(ParseError{op, "Invalid assignment target."})
 		}
-
 	}
 
 	return expr
 }
 
-// CHALLENGE 1: Add comma (easy)
-// comma ::= logicalOr ( , logicalOr )*
-func (p *Parser) parseComma() Expr {
-	if tok, ok := p.consumeOneOf(COMMA); ok {
+// CHALLENGE 2: Add ternary operator
+// ternary ::= logicalOr ("?" expression ":" ternary)?
+func (p *Parser) parseTernary() Expr {
+	if op, ok := p.consumeOneOf(QUESTION_MARK); ok {
 		_ = p.parseLogicalOr()
-		p.report(ParseError{tok, "Missing left-hand operand for ','"})
+		p.report(ParseError{op, "Missing left-hand operand for '?'"})
 		return &NoOpExpr{}
 	}
 
 	expr := p.parseLogicalOr()
 
-	for op := p.peekToken(); op.typ == COMMA; op = p.peekToken() {
-		p.current++
-		rhs := p.parseLogicalOr()
-		expr = &Binary{expr, op, rhs}
+	if op, ok := p.consumeOneOf(QUESTION_MARK); ok {
+		trueBranch := p.parseExpression()
+
+		p.consumeToken(COLON, "Expect ':' in ternary expression.")
+
+		falseBranch := p.parseTernary()
+
+		return &Ternary{
+			token: op,
+			condition: expr,
+			trueBranch: trueBranch,
+			falseBranch: falseBranch,
+		}
 	}
 
 	return expr
@@ -594,7 +619,7 @@ func (p *Parser) parsePostfix() Expr {
 
 /*
  * suffix ::= primary ( "(" arguments? ")"
- *					  | "[" logicalOr "]"
+ *					  | "[" assignment "]"
  *	                  | "." IDENTIFIER
  *				      )*
  */
@@ -608,7 +633,7 @@ func (p *Parser) parseSuffix() Expr {
 			p.consumeToken(RIGHT_PAREN, "Expect ')' after arguments.")
 			expr = &CallExpr{expr, tok, args}
 		case LEFT_BRACKET:
-			index := p.parseLogicalOr()
+			index := p.parseAssignment()
 			p.consumeToken(RIGHT_BRACKET, "Expect ']' after index.")
 			expr = &Index{expr, tok, index}
 		case DOT:
@@ -625,7 +650,7 @@ func (p *Parser) parseArguments() []Expr {
 	args := []Expr{}
 
 	for !p.peekIsOneOf(RIGHT_PAREN, EOF) {
-		arg := p.parseLogicalOr()
+		arg := p.parseAssignment()
 		args = append(args, arg)
 
 		if len(args) >= 255 {
@@ -648,7 +673,6 @@ func (p *Parser) parseArguments() []Expr {
  * 			 | ( expression )
  * 			 | IDENTIFIER
  * 			 | list
- *			 | ifExpr
  * 			 | anonFunction
  */
 func (p *Parser) parsePrimary() Expr {
@@ -674,8 +698,6 @@ func (p *Parser) parsePrimary() Expr {
 		return &Variable{tok}
 	case LEFT_BRACKET:
 		return p.parseList()
-	case IF:
-		return p.parseIfExpr()
 	case FUN:
 		return p.parseAnonFunction()
 	default:
@@ -683,13 +705,12 @@ func (p *Parser) parsePrimary() Expr {
 	}
 }
 
-// list ::= "[" ( logicalOr "," )* (logicalOr ","?)? "]"
-// 			"[" expr "|" generator "," guard "]"
+// list ::= "[" ( assignment "," )* (assignment ","?)? "]"
 func (p *Parser) parseList() Expr {
 	lst := []Expr{}
 
 	for !p.peekIsOneOf(RIGHT_BRACKET, EOF) {
-		ele := p.parseLogicalOr()
+		ele := p.parseAssignment()
 		lst = append(lst, ele)
 
 		if p.peekToken().typ != RIGHT_BRACKET {
@@ -700,31 +721,6 @@ func (p *Parser) parseList() Expr {
 	p.consumeToken(RIGHT_BRACKET, "Expect ']' after list.")
 
 	return &List{lst}
-}
-
-// CHALLENGE 2: Add ternary operator
-// (I opted to do add the rust-style if expr instead)
-// ifExpr ::= 'if' logicalOr { expr } 'else' ( { expr } | ifExpr )
-func (p *Parser) parseIfExpr() Expr {
-	tok := p.tokens[p.current-1]
-	cond := p.parseLogicalOr()
-
-	p.consumeToken(LEFT_BRACE, "Expect '{' after condition.")
-	thenExpr := p.parseExpression()
-	p.consumeToken(RIGHT_BRACE, "Expect '}' after if-block.")
-
-	p.consumeToken(ELSE, "Expect 'else' after 'if' expression.")
-
-	var elseExpr Expr
-	if p.peekToken().typ == IF {
-		elseExpr = p.parseIfExpr()
-	} else {
-		p.consumeToken(LEFT_BRACE, "Expect '{' after 'else'.")
-		elseExpr = p.parseExpression()
-		p.consumeToken(RIGHT_BRACE, "Expect '}' after else-block.")
-	}
-
-	return &IfExpr{tok, cond, thenExpr, elseExpr}
 }
 
 // anonFunction ::= "fun" "(" parameters? ")" block
