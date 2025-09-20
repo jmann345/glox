@@ -326,19 +326,16 @@ func (p *Parser) parseWhileStmt() Stmt {
 }
 
 // for ::= "for" ( varDecl | exprStmt | ";" ) expression? ";" expression?
-//
-//	block
+//				 block
 func (p *Parser) parseForStmt() Stmt {
 	tok := p.consumeToken(FOR, "Expect 'for' statement.")
 
 	var initializer Stmt
-	switch tok := p.peekToken(); tok.typ {
-	case SEMICOLON:
-		p.current++ // consume ';'
+	if p.tryConsume(SEMICOLON) {
 		initializer = &NoOpStmt{}
-	case VAR:
+	} else if p.peekToken().typ == VAR {
 		initializer = p.parseVarDecl()
-	default:
+	} else {
 		initializer = p.parseExprStmt()
 	}
 
@@ -686,6 +683,8 @@ func (p *Parser) parsePrimary() Expr {
 	}
 }
 
+// list ::= "[" ( logicalOr "," )* (logicalOr ","?)? "]"
+// 			"[" expr "|" generator "," guard "]"
 func (p *Parser) parseList() Expr {
 	lst := []Expr{}
 
