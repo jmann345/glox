@@ -1,3 +1,3 @@
-print "class C { class bad(){ print this; } }\n"
-print "Expected: resolver error\n"
+print "class C { class bad(){ print this; } }";
+print "Expected: resolver error";
 class C { class bad(){ print this; } }  # resolver error expected

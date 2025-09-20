@@ -22,9 +22,9 @@ print b;               # expect: nil
 if true { print 1; } else { print 2; }  # expect: 1
 if false { print 3; }                   # expect: (nothing)
 
-# if expression
-print if true { 1 } else { 2 };         # expect: 1
-print if false { "x" } else { "y" } + "z"; # expect: yz
+# ternary expression
+print true ? 1 : 2;         # expect: 1
+print (false ? "x" : "y") + "z"; # expect: yz
 
 # while loop with break/cycle
 var i = 0;

@@ -642,7 +642,14 @@ func (r *Resolver) resThisExpr(expr *This) error {
 		}
 	}
 
+    if r.currentFunction == STATIC_METHOD {
+        return ResolverError{expr.keyword,
+			"Can't use 'this' in a static method.",
+		}
+    }
+
 	r.resolveLocal(expr, expr.keyword, true)
+
 	return nil
 }
 
