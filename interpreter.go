@@ -861,7 +861,7 @@ func (i *Interpreter) evalLogical(expr *Binary) (any, error) {
 
 	// Try to short circuit
 	if expr.op.typ == OR && lhs_b {
-		return true, nil 
+		return true, nil
 	}
 
 	if expr.op.typ == AND && !lhs_b {
@@ -1038,11 +1038,11 @@ func (i *Interpreter) evalAugSet(expr *AugSet) (any, error) {
 		return nil, err
 	}
 
-	obj, ok := object.(Object); 
+	obj, ok := object.(Object)
 	if !ok {
 		return nil, RuntimeError{expr.name, "Only objects have fields."}
 	}
-	
+
 	rhs, err := i.evaluate(expr.rhs)
 	if err != nil {
 		return nil, err
@@ -1139,4 +1139,3 @@ func (i *Interpreter) evalTernary(expr *Ternary) (any, error) {
 		return i.evaluate(expr.falseBranch)
 	}
 }
-

@@ -326,7 +326,8 @@ func (p *Parser) parseWhileStmt() Stmt {
 }
 
 // for ::= "for" ( varDecl | exprStmt | ";" ) expression? ";" expression?
-//				 block
+//
+//	block
 func (p *Parser) parseForStmt() Stmt {
 	tok := p.consumeToken(FOR, "Expect 'for' statement.")
 
@@ -410,7 +411,8 @@ func (p *Parser) parseComma() Expr {
 }
 
 // assignment ::= ternary
-//	            | suffix ( ( "=" | "-=" | "+=" | "/=" | "*=" ) assignment )
+//
+//	| suffix ( ( "=" | "-=" | "+=" | "/=" | "*=" ) assignment )
 func (p *Parser) parseAssignment() Expr {
 	expr := p.parseTernary()
 
@@ -471,9 +473,9 @@ func (p *Parser) parseTernary() Expr {
 		falseBranch := p.parseTernary()
 
 		return &Ternary{
-			token: op,
-			condition: expr,
-			trueBranch: trueBranch,
+			token:       op,
+			condition:   expr,
+			trueBranch:  trueBranch,
 			falseBranch: falseBranch,
 		}
 	}

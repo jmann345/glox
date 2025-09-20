@@ -118,7 +118,7 @@ type Ternary struct {
 func (Ternary) isExpr() {}
 func (t Ternary) String() string {
 	return parenthesize(
-		t.condition.String() + " ?", t.trueBranch, t.falseBranch,
+		t.condition.String()+" ?", t.trueBranch, t.falseBranch,
 	)
 }
 
@@ -211,26 +211,26 @@ func (s SetIndex) String() string {
 type AugSet struct {
 	object Expr
 	name   Token
-	op 	   Token
+	op     Token
 	rhs    Expr
 }
 
 func (AugSet) isExpr() {}
 func (a AugSet) String() string {
-	return parenthesize(a.name.lexeme + a.op.lexeme, a.object, a.rhs)
+	return parenthesize(a.name.lexeme+a.op.lexeme, a.object, a.rhs)
 }
 
 type AugSetIndex struct {
 	list    Expr
 	bracket Token
 	index   Expr
-	op 	    Token
-	rhs   	Expr
+	op      Token
+	rhs     Expr
 }
 
 func (AugSetIndex) isExpr() {}
 func (a AugSetIndex) String() string {
-	return parenthesize("set" + a.op.lexeme, a.list, a.index, a.rhs)
+	return parenthesize("set"+a.op.lexeme, a.list, a.index, a.rhs)
 }
 
 type This struct {

@@ -482,7 +482,6 @@ func (r *Resolver) resAugSetExpr(expr *AugSet) error {
 		return err
 	}
 
-
 	return nil
 }
 
