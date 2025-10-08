@@ -109,8 +109,11 @@ print c.inc();  # 1
 ## Builtins
 
 clock() - returns seconds since Unix epoch as a float  
+
 len(list) - returns the number of elements in a list  
+
 append(list, val) - returns a new list with val appended at the end
+
 type(obj) - returns the type of an object in string format 
 
 -------------------------------------------------------------------------------
