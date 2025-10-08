@@ -14,7 +14,7 @@ glox supports first-class functions, lists, classes (with static and instance me
 
 1. "#" for single-line comments and "#[ ... ]#" for block comments  
 2. "not" replaces "!" for logical negation  
-3. If and loop expressions require braces, but do not require parentheses around the conditions
+3. If and loop expressions require braces around the body, but do not require parentheses around the conditions
 4. Only "false" is falsey
 5. Supports prefix and postfix ++ and --  
 6. Supports "+=", "-=", "*=", and "/=" operators  
