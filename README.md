@@ -1,14 +1,12 @@
 # glox
 
-glox is a Go-based interpreter originally inspired by Crafting Interpreters, but it has evolved into a completely different language. It is **not** Lox in Go. Its syntax, semantics, and runtime rules differ substantially. glox is expression-oriented, minimal, and designed to feel consistent and powerful without unnecessary complexity.
-
-Repository: https://github.com/jmann345/glox
+glox started as a Go-based interpreter for Lox inspired by @munificent, but it has evolved into a similar yet noticeably distinct language. I highly reccomend checking out the [book](https://craftinginterpreters.com/) to learn more about Lox and how my implementation is different!
 
 -------------------------------------------------------------------------------
 
 ## Overview
 
-glox supports first-class functions, lists, classes (with static and instance methods), and extended flow control. It runs on a tree-walk interpreter written entirely in Go, using no external dependencies. The project demonstrates how a small language can grow beyond its tutorial origins into something unique.
+glox supports first-class functions, lists, classes (with static and instance methods), and extended flow control. It runs on a tree-walk interpreter written entirely in Go, using no external dependencies. The project demonstrates how a small language can grow beyond its origins into something unique.
 
 -------------------------------------------------------------------------------
 
