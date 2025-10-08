@@ -145,14 +145,19 @@ print seq;
 ## CLI Usage
 
 Build:
+```
 git clone https://github.com/jmann345/glox
 cd glox
 go build -o glox .
-
+```
 Run a script:
+```
 ./glox path/to/script.lox
+```
 
 Start the REPL:
+```
 ./glox
 [1] print "hello world";
 hello world
+```
