@@ -118,30 +118,6 @@ type(obj) - returns the type of an object in string format
 
 -------------------------------------------------------------------------------
 
-## Example Program
-
-# Fibonacci sequence example
-```
-fun fib(n) {
-  if n <= 1 { return n; }
-
-  var a = 0;
-  var b = 1;
-  for var i = 2; i <= n; i++ {
-    a, b = b, a + b;
-  }
-  return b;
-}
-
-var seq = [];
-for var i = 0; i < 10; i++ {
-  append(seq, fib(i));
-}
-print seq;
-```
-
--------------------------------------------------------------------------------
-
 ## CLI Usage
 
 Build:
