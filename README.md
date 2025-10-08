@@ -86,22 +86,93 @@ print add(2, 3);  # 5
 
 ### Classes
 ```
-class Counter {
-  init(start) {
-    this.value = start;
-  }
+class Vec {
+    init() {
+        this.lst = [];
+    }
 
-  inc() {
-    return ++this.value;
-  }
+    class from(lst) {
+        var vec = Vec();
 
-  class zero() {
-    return Counter(0);
-  }
+        for var i = 0; i < len(lst); i++ {
+            vec.push(lst[i]);
+        }
+
+        return vec;
+    }
+
+    get(i) {
+        return this.lst[i];
+    }
+
+    len() {
+        return len(this.lst);
+    }
+
+    empty() {
+        return this.len() == 0;
+    }
+
+    toList() {
+        return this.lst;
+    }
+
+    map(fn) {
+        var out = Vec();
+
+        for var i = 0; i < this.len(); i++ {
+            var x = this.get(i);
+            out.push(fn(x));
+        }
+
+        return out;
+    }
+
+    filter(fn) {
+        var out = Vec();
+        for var i = 0; i < this.len(); i++ {
+            var x = this.get(i);
+            if fn(x) {
+                out.push(x);
+            }
+        }
+        return out;
+    }
+
+    pprint() {
+        print this.lst;
+    }
+
+    # Mutation methods
+    set(i, x) {
+        this.lst[i] = x;
+    }
+
+    push(x) {
+        this.lst = append(this.lst, x);
+    }
+
+    append(xs) {
+        if type(xs) == "list" {
+            for var i = 0; i < len(xs); i++ {
+                this.push(xs[i]);
+            }
+        } else if type(xs) == "Vec" {
+            for var i = 0; i < xs.len(); i++ {
+                this.push(xs.get(i));
+            }
+        } else {
+            print "Invalid type: " + type(xs);
+            print "Did you mean to call push()?";
+        }
+    }
 }
 
-var c = Counter.zero();
-print c.inc();  # 1
+var vec = Vec.from([1, 4, 9, 16]);
+
+vec.map(fun(x) { return x * x; })
+   .filter(fun(x) { return x > 5 and x < 1024; })
+   .pprint(); # prints [16, 81, 256]
 ```
 
 -------------------------------------------------------------------------------
