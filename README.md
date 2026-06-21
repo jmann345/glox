@@ -1,6 +1,6 @@
 # glox
 
-glox started as a Go-based interpreter for Lox inspired by @munificent, but it has evolved into a similar yet noticeably distinct language. I highly reccomend checking out the [book](https://craftinginterpreters.com/) to learn more about Lox and how my implementation is different!
+glox started as a Go-based interpreter for Lox inspired by @munificent, but it has evolved into a similar yet noticeably distinct language. I highly recommend checking out the [book](https://craftinginterpreters.com/) to learn more about Lox and how my implementation is different!
 
 -------------------------------------------------------------------------------
 
